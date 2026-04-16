@@ -1,20 +1,25 @@
 server:
-  port: 8092
+  port: 18092
 
 spring:
   application:
     name: wujie-im
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://172.20.0.2:3306/wujie_im?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    url: jdbc:mysql://mysql.pnkx.top:13306/wujie_im?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
     username: root
     password: 123456
   data:
     redis:
-      host: 172.20.0.1
-      port: 6380
-      password:
+      host: 127.0.0.1
+      port: 6379
       database: 0
+      timeout: 5000
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
 
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml

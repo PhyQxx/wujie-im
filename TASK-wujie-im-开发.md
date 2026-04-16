@@ -23,13 +23,13 @@
 ## 需求文档
 
 PRD 完整路径：
-`/vol2/1000/我的文档/obsidian/PHY/项目/08.IM即时通讯/PRD-即时通讯系统.md`
+`/home/phy/文档/裴浩宇/obsidian/PHY/项目/08.IM即时通讯/PRD-即时通讯系统.md`
 
 ---
 
 ## 设计稿路径
 
-`/root/.openclaw/workspace-des/prototype/即时通讯系统（IM）/`
+`https://yuanxing.pnkx.top:8/%E5%8D%B3%E6%97%B6%E9%80%9A%E8%AE%AF%E7%B3%BB%E7%BB%9F%EF%BC%88IM%EF%BC%89/`
 
 包含：
 - `DESIGN-SPEC-IM.md` — 设计规范

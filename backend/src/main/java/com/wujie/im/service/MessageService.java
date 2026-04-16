@@ -22,6 +22,7 @@ public class MessageService {
     @Autowired
     private MessageReadMapper messageReadMapper;
     @Autowired
+    @org.springframework.context.annotation.Lazy
     private WsHandler wsHandler;
 
     public Message sendMessage(Long senderId, Long conversationId, String content, String contentType) {

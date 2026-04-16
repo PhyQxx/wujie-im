@@ -36,13 +36,14 @@ public class RobotController {
         return Result.success(robotService.listRobots(ownerId));
     }
 
-    @GetMapping("/config/{robotId}")
+    @GetMapping("/{robotId}/ai-config")
     public Result<AiConfig> getAiConfig(@PathVariable Long robotId) {
         return Result.success(robotService.getAiConfig(robotId));
     }
 
-    @PostMapping("/config")
-    public Result<Void> saveAiConfig(@RequestBody AiConfig config) {
+    @PostMapping("/{robotId}/ai-config")
+    public Result<Void> saveAiConfig(@PathVariable Long robotId, @RequestBody AiConfig config) {
+        config.setRobotId(robotId);
         robotService.saveAiConfig(config);
         return Result.success();
     }

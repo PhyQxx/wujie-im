@@ -88,7 +88,7 @@ async function saveBasic() {
 }
 
 async function saveAI() {
-  // TODO: call AI config API
+  await robotStore.updateAiConfig(robotId, aiForm.value)
   ElMessage.success('AI 配置已保存')
 }
 </script>

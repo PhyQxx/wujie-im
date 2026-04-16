@@ -14,7 +14,9 @@ const router = createRouter({
         { path: '/contacts', name: 'Contacts', component: () => import('@/views/Contacts.vue') },
         { path: '/robots', name: 'MyRobots', component: () => import('@/views/MyRobots.vue') },
         { path: '/settings', name: 'Settings', component: () => import('@/views/Settings.vue') },
-        { path: '/admin', name: 'AdminDashboard', component: () => import('@/views/AdminDashboard.vue') }
+        { path: '/admin', name: 'AdminDashboard', component: () => import('@/views/AdminDashboard.vue') },
+        { path: '/group/:id', name: 'GroupDetail', component: () => import('@/views/GroupDetail.vue') },
+        { path: '/robot/:id/config', name: 'RobotConfig', component: () => import('@/views/RobotConfig.vue') }
       ]
     }
   ]

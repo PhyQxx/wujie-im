@@ -20,7 +20,7 @@ public class AiService {
         String provider = config.getProvider();
         switch (provider) {
             case "MINIMAX":
-                return miniMaxService.chat(config, userMessage);
+                return miniMaxService.chat(config, history, userMessage);
             case "GLM":
                 return glmService.chat(config, history, userMessage);
             case "DEEPSEEK":

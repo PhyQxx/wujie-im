@@ -11,7 +11,8 @@ export const useConversationStore = defineStore('conversation', () => {
   async function fetchConversations() {
     loading.value = true
     try {
-      const res = await request.get('/conversation/list')
+      const userId = localStorage.getItem('userId')
+      const res = await request.get(`/conversation/list/${userId}`)
       conversations.value = res.data || []
     } finally {
       loading.value = false
@@ -26,7 +27,8 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   async function createConversation(type: 'SINGLE' | 'GROUP', typeId: number) {
-    const res = await request.post('/conversation/create', { type, typeId })
+    const userId = localStorage.getItem('userId')
+    const res = await request.post('/conversation/single', { userId, otherUserId: typeId })
     conversations.value.unshift(res.data)
     return res.data
   }

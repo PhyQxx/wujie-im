@@ -18,3 +18,4 @@ frontend/*.local
 .idea/
 .vscode/
 *.iml
+.gstack/

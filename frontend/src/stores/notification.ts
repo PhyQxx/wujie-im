@@ -11,16 +11,19 @@ export const useNotificationStore = defineStore('notification', () => {
   async function fetchNotifications(page = 1, size = 20) {
     loading.value = true
     try {
-      const res = await request.get('/notification/list', { params: { page, size } })
+      const userId = localStorage.getItem('userId')
+      const res = await request.get(`/notification/list/${userId}`, { params: { page, size } })
       notifications.value = res.data || []
+      unreadCount.value = notifications.value.filter(n => !n.isRead).length
     } finally {
       loading.value = false
     }
   }
 
   async function fetchUnreadCount() {
-    const res = await request.get('/notification/unread/count')
-    unreadCount.value = res.data || 0
+    const userId = localStorage.getItem('userId')
+    const res = await request.get(`/notification/unread/${userId}`)
+    unreadCount.value = res.data?.length || 0
   }
 
   async function markRead(notificationId: number) {

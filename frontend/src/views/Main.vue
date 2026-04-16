@@ -1,65 +1,58 @@
 <template>
-  <div class="main-layout">
-    <Sidebar :active="activeTab" @change="activeTab = $event" />
-
-    <div class="conversation-panel">
-      <div class="panel-header">
-        <el-input v-model="searchKeyword" placeholder="搜索会话" prefix-icon="Search" clearable />
-        <el-button :icon="Plus" @click="showCreateGroup = true" />
+  <div class="app">
+    <!-- 顶栏 -->
+    <div class="topbar">
+      <a href="/" class="topbar-logo">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        無界
+      </a>
+      <div class="topbar-search">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+        <input type="text" v-model="globalSearch" placeholder="搜索消息、联系人..." />
       </div>
-      <ConversationList :keyword="searchKeyword" @select="selectConversation" />
+      <div class="topbar-actions">
+        <div class="notif-wrap">
+          <button class="topbar-btn" @click="$router.push('/notification')">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path></svg>
+          </button>
+          <span v-if="notificationCount > 0" class="notif-badge"></span>
+        </div>
+        <div class="user-avatar" @click="$router.push('/settings')">
+          {{ userStore.currentUser?.username?.[0] || '用户' }}
+        </div>
+      </div>
     </div>
 
-    <div class="chat-panel">
-      <template v-if="currentConversation">
-        <div class="chat-header">
-          <div class="chat-title">
-            <el-avatar :size="36" :src="currentConversation.targetUser?.avatar">
-              {{ currentConversation.targetUser?.username?.[0] }}
-            </el-avatar>
-            <div class="title-info">
-              <span class="username">{{ currentConversation.targetUser?.username }}</span>
-              <span class="status" :class="currentConversation.targetUser?.userStatus?.toLowerCase()">
-                {{ statusText(currentConversation.targetUser?.userStatus) }}
-              </span>
-            </div>
-          </div>
-          <div class="chat-actions">
-            <el-button :icon="MoreFilled" circle />
-          </div>
+    <div class="main-content">
+      <!-- 侧边栏：会话列表 -->
+      <div class="sidebar">
+        <div class="sidebar-header">
+          <h2>消息</h2>
+          <button class="topbar-btn" @click="showCreateGroup = true" title="新建聊天">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+          </button>
         </div>
-
-        <div class="message-list" ref="messageListRef">
-          <MessageBubble
-            v-for="msg in messages"
-            :key="msg.id"
-            :message="msg"
-            :is-mine="msg.senderId === currentUserId"
-          />
+        <div class="sidebar-tabs">
+          <button
+            v-for="tab in tabs"
+            :key="tab.key"
+            class="sidebar-tab"
+            :class="{ active: activeTab === tab.key }"
+            @click="activeTab = tab.key"
+          >
+            {{ tab.label }}
+          </button>
         </div>
-
-        <div class="chat-input">
-          <el-input
-            v-model="inputText"
-            type="textarea"
-            :rows="3"
-            placeholder="输入消息... (Ctrl+Enter 发送)"
-            @keydown.enter.ctrl.exact.prevent="sendMessage"
-          />
-          <div class="input-actions">
-            <el-button @click="sendImage">图片</el-button>
-            <el-button @click="sendFile">文件</el-button>
-            <el-button type="primary" @click="sendMessage" :disabled="!inputText.trim()">
-              发送
-            </el-button>
-          </div>
+        <div class="sidebar-search">
+          <input type="text" v-model="searchKeyword" placeholder="搜索聊天..." />
         </div>
-      </template>
-
-      <div v-else class="empty-state">
-        <div class="empty-icon">💬</div>
-        <p>选择一个会话开始聊天</p>
+        <ConversationList :keyword="searchKeyword" :filter="activeTab" @select="selectConversation" />
       </div>
+
+      <!-- 聊天主区 -->
+      <ChatPanel ref="chatPanelRef" />
     </div>
 
     <!-- 创建群组弹窗 -->
@@ -78,36 +71,41 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
-import { Plus, MoreFilled } from '@element-plus/icons-vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useConversationStore } from '@/stores/conversation'
-import { useMessageStore } from '@/stores/message'
 import { useGroupStore } from '@/stores/group'
+import { useNotificationStore } from '@/stores/notification'
+import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
-import wsClient from '@/utils/websocket'
-import Sidebar from '@/components/Sidebar.vue'
 import ConversationList from '@/components/ConversationList.vue'
-import MessageBubble from '@/components/MessageBubble.vue'
-import type { Conversation } from '@/types'
+import ChatPanel from '@/components/ChatPanel.vue'
+import wsClient from '@/utils/websocket.ts'
 
-const activeTab = ref('message')
+const router = useRouter()
+const conversationStore = useConversationStore()
+const groupStore = useGroupStore()
+const notificationStore = useNotificationStore()
+const userStore = useUserStore()
+
+const chatPanelRef = ref()
+const globalSearch = ref('')
 const searchKeyword = ref('')
-const inputText = ref('')
-const messageListRef = ref<HTMLElement>()
+const activeTab = ref('all')
 const showCreateGroup = ref(false)
 const groupForm = ref({ name: '' })
 
-const conversationStore = useConversationStore()
-const messageStore = useMessageStore()
-const groupStore = useGroupStore()
+const tabs = [
+  { key: 'all', label: '全部' },
+  { key: 'unread', label: '未读' },
+  { key: 'group', label: '群聊' }
+]
 
-const currentConversation = computed(() => conversationStore.currentConversation)
-const messages = computed(() => messageStore.messages)
-const currentUserId = computed(() => Number(localStorage.getItem('userId')))
+const notificationCount = computed(() => notificationStore.unreadCount)
 
 onMounted(async () => {
+  await notificationStore.fetchNotifications()
   await conversationStore.fetchConversations()
-  messageStore.initWsListener()
   wsClient.on('message', (msg: any) => {
     if (msg && msg.conversationId) {
       conversationStore.updateLastMessage(msg.conversationId, msg.content, msg.createTime)
@@ -120,42 +118,9 @@ onUnmounted(() => {
   wsClient.close()
 })
 
-function statusText(status?: string) {
-  const map: Record<string, string> = {
-    ONLINE: '在线', OFFLINE: '离线', AWAY: '离开', DND: '勿扰'
-  }
-  return map[status || ''] || '离线'
-}
-
 async function selectConversation(conv: Conversation) {
   conversationStore.setCurrentConversation(conv)
-  await messageStore.fetchMessages(conv.id)
-  scrollToBottom()
-}
-
-async function sendMessage() {
-  if (!inputText.value.trim() || !currentConversation.value) return
-  const content = inputText.value
-  inputText.value = ''
-  try {
-    await messageStore.sendMessage({
-      conversationId: currentConversation.value.id,
-      content,
-      contentType: 'TEXT'
-    })
-    await nextTick()
-    scrollToBottom()
-  } catch (_e) {
-    inputText.value = content
-  }
-}
-
-function scrollToBottom() {
-  nextTick(() => {
-    if (messageListRef.value) {
-      messageListRef.value.scrollTop = messageListRef.value.scrollHeight
-    }
-  })
+  chatPanelRef.value?.scrollToBottom()
 }
 
 async function createGroup() {
@@ -168,79 +133,176 @@ async function createGroup() {
   showCreateGroup.value = false
   groupForm.value.name = ''
 }
-
-function sendImage() { ElMessage.info('图片发送功能开发中') }
-function sendFile() { ElMessage.info('文件发送功能开发中') }
 </script>
 
 <style scoped>
-.main-layout {
+.app {
   display: flex;
+  flex-direction: column;
   height: 100vh;
+  overflow: hidden;
   background: var(--bg);
+  font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
-.conversation-panel {
-  width: 300px;
+.topbar {
+  height: 56px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--primary);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.topbar-logo svg { width: 24px; height: 24px; }
+.topbar-search {
+  flex: 1;
+  max-width: 360px;
+  position: relative;
+}
+.topbar-search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.topbar-search input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px 0 36px;
+  background: var(--surface-3);
+  border: 1px solid transparent;
+  border-radius: 20px;
+  font-size: 13px;
+  font-family: inherit;
+  color: var(--text-primary);
+  outline: none;
+  transition: border-color 0.15s;
+}
+.topbar-search input:focus {
+  border-color: var(--primary);
+  background: white;
+}
+.topbar-search input::placeholder { color: var(--text-secondary); }
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+.topbar-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: background 0.15s;
+  flex-shrink: 0;
+}
+.topbar-btn:hover { background: var(--surface-3); color: var(--text-primary); }
+.topbar-btn svg { width: 20px; height: 20px; }
+.notif-wrap { position: relative; }
+.notif-badge {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 8px;
+  height: 8px;
+  background: var(--danger);
+  border-radius: 50%;
+  border: 2px solid var(--surface-1);
+}
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.main-content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.sidebar {
+  width: 280px;
   background: var(--surface-1);
   border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  flex-shrink: 0;
 }
-.panel-header {
-  padding: 12px;
-  display: flex;
-  gap: 8px;
+.sidebar-header {
+  padding: 12px 16px;
   border-bottom: 1px solid var(--border);
-}
-.chat-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-1);
-  min-width: 0;
-}
-.chat-header {
-  height: 60px;
-  padding: 0 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+.sidebar-header h2 { font-size: 15px; font-weight: 600; }
+.sidebar-tabs {
+  display: flex;
+  padding: 8px 12px;
+  gap: 4px;
   border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
 }
-.chat-title { display: flex; align-items: center; gap: 12px; }
-.title-info { display: flex; flex-direction: column; }
-.username { font-weight: 600; font-size: 15px; }
-.status { font-size: 12px; color: #10B981; }
-.status.offline { color: #9CA3AF; }
-.status.away { color: #F59E0B; }
-.status.dnd { color: #EF4444; }
-.message-list {
+.sidebar-tab {
   flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s;
+  text-align: center;
 }
-.chat-input {
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  flex-shrink: 0;
+.sidebar-tab.active { background: var(--primary); color: white; }
+.sidebar-search {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
 }
-.input-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 8px;
+.sidebar-search input {
+  width: 100%;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: inherit;
+  outline: none;
+  background: var(--surface-2);
+  color: var(--text-primary);
 }
-.empty-state {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  color: #9CA3AF;
-}
-.empty-icon { font-size: 64px; margin-bottom: 16px; }
+.sidebar-search input::placeholder { color: var(--text-secondary); }
 </style>

@@ -52,7 +52,10 @@ public class AuthService {
 
     public Map<String, String> login(String username, String password) {
         User user = userMapper.selectOne(
-                new LambdaQueryWrapper<User>().eq(User::getUsername, username)
+                new LambdaQueryWrapper<User>()
+                        .eq(User::getUsername, username)
+                        .or()
+                        .eq(User::getEmail, username)
         );
         if (user == null) {
             throw new RuntimeException("用户名或密码错误");

@@ -8,6 +8,7 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -18,7 +19,7 @@ public class MiniMaxService {
     @Value("${wujie.im.ai.minimax.api-url}")
     private String apiUrl;
 
-    public String chat(AiConfig config, String userMessage) {
+    public String chat(AiConfig config, List<String> history, String userMessage) {
         try {
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -29,12 +30,27 @@ public class MiniMaxService {
 
             Map<String, Object> body = new HashMap<>();
             body.put("model", config.getModel());
+            body.put("temperature", config.getTemperature());
+            body.put("max_tokens", config.getMaxTokens());
+
+            List<Map<String, String>> messages = new ArrayList<>();
+            if (config.getSystemPrompt() != null) {
+                Map<String, String> sysMsg = new HashMap<>();
+                sysMsg.put("role", "system");
+                sysMsg.put("content", config.getSystemPrompt());
+                messages.add(sysMsg);
+            }
+            for (int i = 0; i < history.size(); i++) {
+                Map<String, String> m = new HashMap<>();
+                m.put("role", i % 2 == 0 ? "user" : "assistant");
+                m.put("content", history.get(i));
+                messages.add(m);
+            }
             Map<String, String> msg = new HashMap<>();
             msg.put("role", "user");
             msg.put("content", userMessage);
-            body.put("messages", new Object[]{msg});
-            body.put("temperature", config.getTemperature());
-            body.put("max_tokens", config.getMaxTokens());
+            messages.add(msg);
+            body.put("messages", messages);
 
             String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(body);
             try (OutputStream os = conn.getOutputStream()) {

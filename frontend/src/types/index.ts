@@ -15,8 +15,9 @@ export interface Message {
   id: number
   conversationId: number
   senderId: number
+  senderName?: string
   content: string
-  contentType: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM' | 'CODE'
+  contentType: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM' | 'CODE' | 'AI'
   meta?: any
   status: 'SENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'RECALLED'
   recall?: boolean

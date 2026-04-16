@@ -60,5 +60,12 @@ export const useRobotStore = defineStore('robot', () => {
     rules.value = rules.value.filter(r => r.id !== ruleId)
   }
 
-  return { robots, currentRobot, rules, loading, fetchRobots, createRobot, updateRobot, deleteRobot, fetchRules, addRule, updateRule, deleteRule }
+  async function updateAiConfig(robotId: number, config: any) {
+    const res = await request.post(`/robot/${robotId}/ai-config`, config)
+    const idx = robots.value.findIndex(r => r.id === robotId)
+    if (idx > -1) robots.value[idx].aiConfig = res.data
+    return res.data
+  }
+
+  return { robots, currentRobot, rules, loading, fetchRobots, createRobot, updateRobot, deleteRobot, fetchRules, addRule, updateRule, deleteRule, updateAiConfig }
 })
