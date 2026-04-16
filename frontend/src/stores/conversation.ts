@@ -32,10 +32,13 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   function updateLastMessage(conversationId: number, content: string, time: string) {
-    const conv = conversations.value.find(c => c.id === conversationId)
-    if (conv) {
-      conv.lastMessageContent = content
-      conv.lastMessageTime = time
+    const idx = conversations.value.findIndex(c => c.id === conversationId)
+    if (idx > -1) {
+      conversations.value[idx].lastMessageContent = content
+      conversations.value[idx].lastMessageTime = time
+      // move to front
+      const conv = conversations.value.splice(idx, 1)[0]
+      conversations.value.unshift(conv)
     }
   }
 

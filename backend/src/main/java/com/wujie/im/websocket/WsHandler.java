@@ -3,6 +3,10 @@ package com.wujie.im.websocket;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.wujie.im.common.JwtUtil;
+import com.wujie.im.entity.Conversation;
+import com.wujie.im.entity.Message;
+import com.wujie.im.service.ConversationService;
+import com.wujie.im.service.GroupService;
 import com.wujie.im.service.MessageService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -10,6 +14,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -22,6 +27,10 @@ public class WsHandler implements WebSocketHandler {
     private JwtUtil jwtUtil;
     @Autowired
     private MessageService messageService;
+    @Autowired
+    private ConversationService conversationService;
+    @Autowired
+    private GroupService groupService;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -76,7 +85,38 @@ public class WsHandler implements WebSocketHandler {
         Long conversationId = json.getLong("conversationId");
         String content = json.getStr("content");
         String contentType = json.getStr("contentType", "TEXT");
-        messageService.sendMessage(senderId, conversationId, content, contentType);
+
+        // 保存消息
+        Message msg = messageService.sendMessage(senderId, conversationId, content, contentType);
+
+        // 获取会话信息，确定接收者
+        Conversation conv = conversationService.getConversationById(conversationId);
+        if (conv != null) {
+            if ("SINGLE".equals(conv.getType())) {
+                // 单聊：发给对方
+                Long receiverId = conv.getTypeId();
+                conversationService.updateLastMessage(conversationId, msg.getId(), content);
+                sendToUser(receiverId, JSONUtil.toJsonStr(
+                        Map.of("type", "message", "data", msg)
+                ));
+            } else if ("GROUP".equals(conv.getType())) {
+                // 群聊：广播给所有群成员（除发送者）
+                List<Long> memberIds = groupService.getGroupMemberIds(conv.getTypeId());
+                for (Long memberId : memberIds) {
+                    if (!memberId.equals(senderId)) {
+                        sendToUser(memberId, JSONUtil.toJsonStr(
+                                Map.of("type", "message", "data", msg)
+                        ));
+                    }
+                }
+                conversationService.updateLastMessage(conversationId, msg.getId(), content);
+            }
+        }
+
+        // 确认消息发给发送者（状态更新为已发送）
+        sendToUser(senderId, JSONUtil.toJsonStr(
+                Map.of("type", "message", "data", msg)
+        ));
     }
 
     private void handleReadMessage(JSONObject json) {

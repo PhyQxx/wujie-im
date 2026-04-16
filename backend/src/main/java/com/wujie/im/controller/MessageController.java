@@ -31,15 +31,15 @@ public class MessageController {
         return Result.success(messageService.getMessages(conversationId, beforeId, limit));
     }
 
-    @PostMapping("/read")
+    @PutMapping("/read")
     public Result<Void> markAsRead(@RequestBody Map<String, Long> params) {
         messageService.markAsRead(params.get("userId"), params.get("conversationId"), params.get("messageId"));
         return Result.success();
     }
 
-    @PostMapping("/recall")
-    public Result<Void> recallMessage(@RequestBody Map<String, Long> params) {
-        messageService.recallMessage(params.get("userId"), params.get("messageId"));
+    @PutMapping("/recall/{messageId}")
+    public Result<Void> recallMessage(@PathVariable Long messageId, @RequestParam Long userId) {
+        messageService.recallMessage(userId, messageId);
         return Result.success();
     }
 }

@@ -2,11 +2,20 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { User, FriendRequest } from '@/types'
 import request from '@/utils/request'
+import wsClient from '@/utils/websocket'
 
 export const useFriendStore = defineStore('friend', () => {
   const friends = ref<User[]>([])
   const requests = ref<FriendRequest[]>([])
   const loading = ref(false)
+
+  function initWsListener() {
+    wsClient.on('notification', (notif: any) => {
+      if (notif.type === 'FRIEND_REQUEST') {
+        requests.value.unshift(notif)
+      }
+    })
+  }
 
   async function fetchFriends() {
     loading.value = true
@@ -43,5 +52,5 @@ export const useFriendStore = defineStore('friend', () => {
     return res.data || []
   }
 
-  return { friends, requests, loading, fetchFriends, fetchRequests, sendRequest, handleRequest, deleteFriend, searchUsers }
+  return { friends, requests, loading, initWsListener, fetchFriends, fetchRequests, sendRequest, handleRequest, deleteFriend, searchUsers }
 })

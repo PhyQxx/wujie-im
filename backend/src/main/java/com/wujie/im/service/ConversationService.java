@@ -14,6 +14,10 @@ public class ConversationService {
     @Autowired
     private ConversationMapper conversationMapper;
 
+    public Conversation getConversationById(Long conversationId) {
+        return conversationMapper.selectById(conversationId);
+    }
+
     public List<Conversation> getConversations(Long userId) {
         return conversationMapper.selectList(
                 new LambdaQueryWrapper<Conversation>()

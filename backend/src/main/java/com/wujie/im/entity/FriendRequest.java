@@ -19,4 +19,6 @@ public class FriendRequest {
     private LocalDateTime updateTime;
     @TableLogic
     private Integer deleted;
+    @TableField(exist = false)
+    private User fromUser;
 }

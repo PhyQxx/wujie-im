@@ -3,6 +3,7 @@ package com.wujie.im.controller;
 import com.wujie.im.common.Result;
 import com.wujie.im.entity.FriendRequest;
 import com.wujie.im.entity.User;
+import com.wujie.im.mapper.UserMapper;
 import com.wujie.im.service.FriendService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
@@ -14,6 +15,8 @@ import java.util.Map;
 public class FriendController {
     @Autowired
     private FriendService friendService;
+    @Autowired
+    private UserMapper userMapper;
 
     @PostMapping("/request")
     public Result<Void> sendRequest(@RequestBody Map<String, Object> params) {
@@ -31,7 +34,14 @@ public class FriendController {
 
     @GetMapping("/requests/{userId}")
     public Result<List<FriendRequest>> getRequests(@PathVariable Long userId) {
-        return Result.success(friendService.getRequests(userId));
+        List<FriendRequest> requests = friendService.getRequests(userId);
+        // 填充申请人用户信息
+        for (FriendRequest req : requests) {
+            User fromUser = userMapper.selectById(req.getFromUserId());
+            if (fromUser != null) fromUser.setPassword(null);
+            req.setFromUser(fromUser);
+        }
+        return Result.success(requests);
     }
 
     @PutMapping("/request/{requestId}")

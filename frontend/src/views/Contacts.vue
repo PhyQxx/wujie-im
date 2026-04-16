@@ -81,9 +81,10 @@ const showAddFriend = ref(false)
 const searchUser = ref('')
 const searchResults = ref<User[]>([])
 
-onMounted(() => {
-  friendStore.fetchFriends()
-  friendStore.fetchRequests()
+onMounted(async () => {
+  await friendStore.fetchFriends()
+  await friendStore.fetchRequests()
+  friendStore.initWsListener()
 })
 
 const filteredFriends = computed(() =>

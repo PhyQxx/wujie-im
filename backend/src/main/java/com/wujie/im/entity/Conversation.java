@@ -3,6 +3,8 @@ package com.wujie.im.entity;
 import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
 import java.time.LocalDateTime;
+import com.wujie.im.entity.GroupInfo;
+import com.wujie.im.entity.User;
 
 @Data
 @TableName("conversation")
@@ -22,4 +24,8 @@ public class Conversation {
     private LocalDateTime updateTime;
     @TableLogic
     private Integer deleted;
+    @TableField(exist = false)
+    private User targetUser;
+    @TableField(exist = false)
+    private GroupInfo groupInfo;
 }

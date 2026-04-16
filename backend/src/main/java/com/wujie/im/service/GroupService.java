@@ -11,6 +11,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Slf4j
 @Service
@@ -49,6 +50,13 @@ public class GroupService {
         return groupMemberMapper.selectList(
                 new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getGroupId, groupId)
         );
+    }
+
+    public List<Long> getGroupMemberIds(Long groupId) {
+        List<GroupMember> members = groupMemberMapper.selectList(
+                new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getGroupId, groupId)
+        );
+        return members.stream().map(GroupMember::getUserId).collect(Collectors.toList());
     }
 
     public void joinGroup(Long groupId, Long userId, String reason) {

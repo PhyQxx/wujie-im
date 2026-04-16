@@ -78,12 +78,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { Plus, MoreFilled } from '@element-plus/icons-vue'
 import { useConversationStore } from '@/stores/conversation'
 import { useMessageStore } from '@/stores/message'
 import { useGroupStore } from '@/stores/group'
 import { ElMessage } from 'element-plus'
+import wsClient from '@/utils/websocket'
 import Sidebar from '@/components/Sidebar.vue'
 import ConversationList from '@/components/ConversationList.vue'
 import MessageBubble from '@/components/MessageBubble.vue'
@@ -104,8 +105,19 @@ const currentConversation = computed(() => conversationStore.currentConversation
 const messages = computed(() => messageStore.messages)
 const currentUserId = computed(() => Number(localStorage.getItem('userId')))
 
-onMounted(() => {
-  conversationStore.fetchConversations()
+onMounted(async () => {
+  await conversationStore.fetchConversations()
+  messageStore.initWsListener()
+  wsClient.on('message', (msg: any) => {
+    if (msg && msg.conversationId) {
+      conversationStore.updateLastMessage(msg.conversationId, msg.content, msg.createTime)
+    }
+  })
+})
+
+onUnmounted(() => {
+  wsClient.off('message', () => {})
+  wsClient.close()
 })
 
 function statusText(status?: string) {

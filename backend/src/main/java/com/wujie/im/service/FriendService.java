@@ -1,16 +1,22 @@
 package com.wujie.im.service;
 
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.wujie.im.entity.FriendRelation;
 import com.wujie.im.entity.FriendRequest;
+import com.wujie.im.entity.Notification;
 import com.wujie.im.entity.User;
 import com.wujie.im.mapper.FriendRelationMapper;
 import com.wujie.im.mapper.FriendRequestMapper;
 import com.wujie.im.mapper.UserMapper;
+import com.wujie.im.service.NotificationService;
+import com.wujie.im.websocket.WsHandler;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Slf4j
 @Service
@@ -21,6 +27,10 @@ public class FriendService {
     private FriendRelationMapper friendRelationMapper;
     @Autowired
     private UserMapper userMapper;
+    @Autowired
+    private NotificationService notificationService;
+    @Autowired
+    private WsHandler wsHandler;
 
     public void sendRequest(Long fromUserId, Long toUserId, String reason) {
         FriendRelation exist = friendRelationMapper.selectOne(
@@ -37,6 +47,22 @@ public class FriendService {
         req.setReason(reason);
         req.setStatus("PENDING");
         friendRequestMapper.insert(req);
+
+        // 通过WebSocket通知被申请者
+        notificationService.sendNotification(toUserId, "FRIEND_REQUEST",
+                "新的好友申请", "用户 " + fromUserId + " 申请加你为好友", req.getId());
+
+        // WebSocket实时推送
+        Notification notif = new Notification();
+        notif.setUserId(toUserId);
+        notif.setType("FRIEND_REQUEST");
+        notif.setTitle("新的好友申请");
+        notif.setContent("用户 " + fromUserId + " 申请加你为好友");
+        notif.setSourceId(req.getId());
+        Map<String, Object> pushData = new HashMap<>();
+        pushData.put("type", "notification");
+        pushData.put("data", notif);
+        wsHandler.sendToUser(toUserId, JSONUtil.toJsonStr(pushData));
     }
 
     public List<FriendRequest> getRequests(Long userId) {

@@ -2,16 +2,39 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Message } from '@/types'
 import request from '@/utils/request'
+import wsClient from '@/utils/websocket'
 
 export const useMessageStore = defineStore('message', () => {
   const messages = ref<Message[]>([])
   const loading = ref(false)
 
-  async function fetchMessages(conversationId: number, page = 1, size = 50) {
+  function initWsListener() {
+    wsClient.on('message', (msg: any) => {
+      if (msg && msg.conversationId) {
+        messages.value.unshift(msg)
+      }
+    })
+    wsClient.on('recall_message', (messageId: number) => {
+      const idx = messages.value.findIndex(m => m.id === messageId)
+      if (idx > -1) {
+        messages.value[idx].recall = true
+        messages.value[idx].status = 'RECALLED'
+      }
+    })
+  }
+
+  async function fetchMessages(conversationId: number, beforeId?: number) {
     loading.value = true
     try {
-      const res = await request.get('/message/list', { params: { conversationId, page, size } })
-      messages.value = (res.data || []).reverse()
+      const res = await request.get('/conversation/' + conversationId + '/messages', {
+        params: beforeId ? { beforeId } : {}
+      })
+      const newMessages = res.data || []
+      if (beforeId) {
+        messages.value.push(...newMessages)
+      } else {
+        messages.value = newMessages
+      }
     } finally {
       loading.value = false
     }
@@ -54,5 +77,5 @@ export const useMessageStore = defineStore('message', () => {
     messages.value = []
   }
 
-  return { messages, loading, fetchMessages, sendMessage, recallMessage, appendMessage, clear }
+  return { messages, loading, initWsListener, fetchMessages, sendMessage, recallMessage, appendMessage, clear }
 })
