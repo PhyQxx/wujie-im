@@ -36,6 +36,18 @@ public class RobotController {
         return Result.success(robotService.listRobots(ownerId));
     }
 
+    @PutMapping("/{robotId}")
+    public Result<Void> updateRobot(@PathVariable Long robotId, @RequestBody Map<String, Object> params) {
+        robotService.updateRobot(robotId, params);
+        return Result.success();
+    }
+
+    @DeleteMapping("/{robotId}")
+    public Result<Void> deleteRobot(@PathVariable Long robotId) {
+        robotService.deleteRobot(robotId);
+        return Result.success();
+    }
+
     @GetMapping("/{robotId}/ai-config")
     public Result<AiConfig> getAiConfig(@PathVariable Long robotId) {
         return Result.success(robotService.getAiConfig(robotId));
@@ -53,17 +65,36 @@ public class RobotController {
         return Result.success(robotService.getRules(robotId));
     }
 
+    @PostMapping("/rules/{robotId}")
+    public Result<RobotRule> addRule(@PathVariable Long robotId, @RequestBody RobotRule rule) {
+        return Result.success(robotService.addRule(robotId, rule));
+    }
+
+    @PutMapping("/rules/{ruleId}")
+    public Result<Void> updateRule(@PathVariable Long ruleId, @RequestBody RobotRule rule) {
+        robotService.updateRule(ruleId, rule);
+        return Result.success();
+    }
+
+    @DeleteMapping("/rules/{ruleId}")
+    public Result<Void> deleteRule(@PathVariable Long ruleId) {
+        robotService.deleteRule(ruleId);
+        return Result.success();
+    }
+
     @PostMapping("/chat/{robotId}")
     public Result<Map<String, String>> chat(@PathVariable Long robotId, @RequestBody Map<String, Object> params) {
-        AiConfig config = robotService.getAiConfig(robotId);
-        if (config == null) return Result.error("机器人未配置AI");
-
         String content = (String) params.get("content");
+
+        // 先匹配自定义规则（关键字/正则/Webhook）
         String matched = robotService.matchRule(robotId, content);
         String reply;
         if (matched != null) {
             reply = matched;
         } else {
+            // 再尝试 AI 对话
+            AiConfig config = robotService.getAiConfig(robotId);
+            if (config == null) return Result.error("机器人未配置AI");
             @SuppressWarnings("unchecked")
             List<String> history = (List<String>) params.getOrDefault("history", new ArrayList<>());
             reply = aiService.chat(config, history, content);

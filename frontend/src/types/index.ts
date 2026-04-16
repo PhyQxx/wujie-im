@@ -19,7 +19,7 @@ export interface Message {
   content: string
   contentType: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM' | 'CODE' | 'AI'
   meta?: any
-  status: 'SENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'RECALLED'
+  status: 'SENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'RECALLED' | 'FAILED'
   recall?: boolean
   replyId?: number
   createTime: string
@@ -53,7 +53,7 @@ export interface GroupMember {
   groupId: number
   userId: number
   role: 'OWNER' | 'ADMIN' | 'MEMBER'
-  muted: boolean
+  muted: number
   mutedUntil?: string
   joinTime: string
   user?: User

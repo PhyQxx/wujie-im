@@ -20,7 +20,16 @@
           <div v-else class="text-msg">{{ message.content }}</div>
         </template>
       </div>
-      <div class="msg-time">{{ formatTime(message.createTime) }}</div>
+      <div class="msg-time">
+        {{ formatTime(message.createTime) }}
+        <span v-if="isMine && message.status" class="status-icon" :class="message.status.toLowerCase()">
+          <span v-if="message.status === 'SENDING'" class="sending-icon">⏳</span>
+          <span v-else-if="message.status === 'SENT'" class="sent-icon">✓</span>
+          <span v-else-if="message.status === 'DELIVERED'" class="delivered-icon">✓✓</span>
+          <span v-else-if="message.status === 'READ'" class="read-icon">✓✓</span>
+          <span v-else-if="message.status === 'FAILED'" class="failed-icon">⚠</span>
+        </span>
+      </div>
     </div>
   </div>
 </template>
@@ -44,7 +53,7 @@ const avatarText = computed(() => {
 
 const avatarStyle = computed(() => {
   if (props.isMine) {
-    return { background: 'var(--primary)', color: 'white' }
+    return { background: '#4F46E5', color: 'white' }
   }
   if (isAiMessage.value) {
     return { background: 'linear-gradient(135deg, #4F46E5, #7C3AED)', color: 'white' }
@@ -53,11 +62,6 @@ const avatarStyle = computed(() => {
   const textColors: Record<string, string> = { '#DBEAFE': '#2563EB', '#D1FAE5': '#059669', '#FCE7F3': '#DB2777', '#FEF3C7': '#D97706', '#FEE2E2': '#DC2626', '#F3E8FF': '#7C3AED' }
   const idx = (senderName.value.charCodeAt(0) || 0) % colors.length
   return { background: colors[idx], color: textColors[colors[idx]] }
-})
-
-const statusIcon = computed(() => {
-  const map: Record<string, string> = { SENDING: '⏳', SENT: '✓', DELIVERED: '✓✓', READ: '✓✓', RECALLED: '✕' }
-  return map[props.message.status] || ''
 })
 
 function formatTime(time: string) {
@@ -70,6 +74,11 @@ function formatTime(time: string) {
   display: flex;
   gap: 8px;
   max-width: 72%;
+  animation: msgIn 0.2s ease-out;
+}
+@keyframes msgIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 .message-row.outgoing {
   align-self: flex-end;
@@ -106,7 +115,7 @@ function formatTime(time: string) {
 }
 .ai-badge {
   font-size: 10px;
-  background: var(--primary);
+  background: #4F46E5;
   color: white;
   padding: 1px 5px;
   border-radius: 4px;
@@ -115,26 +124,26 @@ function formatTime(time: string) {
 }
 .msg-bubble {
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: 16px;
   font-size: 13px;
   line-height: 1.5;
   word-break: break-word;
   max-width: 100%;
 }
 .message-row.incoming .msg-bubble {
-  background: var(--surface-3);
-  color: var(--text-primary);
+  background: #F3F4F6;
+  color: #111827;
   border-bottom-left-radius: 4px;
 }
 .message-row.outgoing .msg-bubble {
-  background: var(--primary);
+  background: #4F46E5;
   color: white;
   border-bottom-right-radius: 4px;
 }
 .message-row.ai .msg-bubble {
   background: linear-gradient(135deg, #EEF2FF, #f5f3ff);
   border: 1px solid #c7d2fe;
-  color: var(--primary);
+  color: #4F46E5;
 }
 .image-msg img {
   max-width: 200px;
@@ -147,7 +156,7 @@ function formatTime(time: string) {
   padding: 8px 12px;
   border-radius: 8px;
   font-size: 13px;
-  color: var(--primary);
+  color: #4F46E5;
 }
 .system-msg {
   text-align: center;
@@ -158,9 +167,19 @@ function formatTime(time: string) {
 .recalled { color: var(--text-secondary); font-size: 13px; font-style: italic; padding: 4px 8px; }
 .msg-time {
   font-size: 10px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   margin-top: 2px;
   margin-left: 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
-.message-row.outgoing .msg-time { text-align: right; }
+.message-row.outgoing .msg-time { text-align: right; justify-content: flex-end; }
+.status-icon { font-size: 11px; }
+.sent-icon { color: var(--text-muted); }
+.delivered-icon { color: var(--text-secondary); }
+.read-icon { color: #3B82F6; }
+.failed-icon { color: #EF4444; }
+.sending-icon { animation: spin 1s linear infinite; display: inline-block; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 </style>
