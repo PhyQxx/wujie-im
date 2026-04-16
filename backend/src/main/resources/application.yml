@@ -1,0 +1,47 @@
+server:
+  port: 8092
+
+spring:
+  application:
+    name: wujie-im
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://172.20.0.2:3306/wujie_im?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: root
+    password: 123456
+  data:
+    redis:
+      host: 172.20.0.1
+      port: 6380
+      password:
+      database: 0
+
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.wujie.im.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+jwt:
+  secret: wujie-im-secret-key-change-in-production-2024
+  access-token-validity: 900000
+  refresh-token-validity: 604800000
+
+wujie:
+  im:
+    websocket:
+      heartbeat-interval: 30000
+    ai:
+      minimax:
+        api-url: https://api.minimax.chat/v1/text/chatcompletion_v2
+      glm:
+        api-url: https://open.bigmodel.cn/api/paas/v4/chat/completions
+      deepseek:
+        api-url: https://api.deepseek.com/v1/chat/completions
