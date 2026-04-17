@@ -18,7 +18,7 @@ public class UserController {
     @GetMapping("/list")
     public Result<List<User>> listUsers(@RequestParam(required = false) String keyword,
                                          @RequestParam(required = false) Long excludeId) {
-        return Result.success(userService.listUsers(keyword, excludeId));
+        return Result.success(userService.listUsers(keyword));
     }
 
     @GetMapping("/{id}")
