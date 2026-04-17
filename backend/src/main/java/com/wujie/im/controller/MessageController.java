@@ -16,11 +16,15 @@ public class MessageController {
 
     @PostMapping("/send")
     public Result<Message> sendMessage(@RequestBody Map<String, Object> params) {
+        String meta = params.get("meta") != null ? (String) params.get("meta") : null;
+        Long replyId = params.get("replyId") != null ? Long.valueOf(params.get("replyId").toString()) : null;
         return Result.success(messageService.sendMessage(
                 Long.valueOf(params.get("senderId").toString()),
                 Long.valueOf(params.get("conversationId").toString()),
                 (String) params.get("content"),
-                (String) params.get("contentType")
+                (String) params.get("contentType"),
+                meta,
+                replyId
         ));
     }
 

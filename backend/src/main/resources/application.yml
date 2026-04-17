@@ -4,9 +4,13 @@ server:
 spring:
   application:
     name: wujie-im
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://mysql.pnkx.top:13306/wujie_im?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    url: jdbc:mysql://127.0.0.1:3306/wujie_im?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
     username: root
     password: 123456
   data:
@@ -43,6 +47,8 @@ wujie:
   im:
     websocket:
       heartbeat-interval: 30000
+    crypto:
+      aes-key: wujie-im-aes-256-key-2024-change-in-production
     ai:
       minimax:
         api-url: https://api.minimax.chat/v1/text/chatcompletion_v2
@@ -50,3 +56,11 @@ wujie:
         api-url: https://open.bigmodel.cn/api/paas/v4/chat/completions
       deepseek:
         api-url: https://api.deepseek.com/v1/chat/completions
+
+ftp:
+  host: 127.0.0.1
+  port: 21
+  username: anonymous
+  password: ""
+  path: /
+  url-prefix: http://ftp.pnkx.top:8

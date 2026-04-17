@@ -33,7 +33,18 @@ public class UserService {
 
     public User getUserById(Long id) {
         User user = userMapper.selectById(id);
-        if (user != null) user.setPassword(null);
+        if (user != null) {
+            user.setPassword(null);
+            // 合并 UserProfile 数据
+            UserProfile profile = userProfileMapper.selectOne(
+                    new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, id)
+            );
+            if (profile != null) {
+                user.setNickname(profile.getNickname());
+                user.setAvatar(profile.getAvatar());
+                user.setSignature(profile.getSignature());
+            }
+        }
         return user;
     }
 
@@ -51,6 +62,14 @@ public class UserService {
     }
 
     public void updateProfile(UserProfile profile) {
-        userProfileMapper.updateById(profile);
+        UserProfile existing = userProfileMapper.selectOne(
+                new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, profile.getUserId())
+        );
+        if (existing != null) {
+            profile.setId(existing.getId());
+            userProfileMapper.updateById(profile);
+        } else {
+            userProfileMapper.insert(profile);
+        }
     }
 }

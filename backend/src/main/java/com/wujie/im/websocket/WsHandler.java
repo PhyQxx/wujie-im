@@ -85,9 +85,10 @@ public class WsHandler implements WebSocketHandler {
         Long conversationId = json.getLong("conversationId");
         String content = json.getStr("content");
         String contentType = json.getStr("contentType", "TEXT");
+        String metaStr = json.getStr("meta");
 
-        // 保存消息
-        Message msg = messageService.sendMessage(senderId, conversationId, content, contentType);
+        // 保存消息（meta中可能包含atAll字段）
+        Message msg = messageService.sendMessage(senderId, conversationId, content, contentType, metaStr);
 
         // 获取会话信息，确定接收者
         Conversation conv = conversationService.getConversationById(conversationId);
@@ -100,10 +101,12 @@ public class WsHandler implements WebSocketHandler {
                         Map.of("type", "message", "data", msg)
                 ));
             } else if ("GROUP".equals(conv.getType())) {
-                // 群聊：广播给所有群成员（除发送者）
+                // 群聊：广播给所有群成员
                 List<Long> memberIds = groupService.getGroupMemberIds(conv.getTypeId());
+                // 检查是否@全体
+                boolean atAll = msg.getMeta() != null && msg.getMeta().contains("atAll");
                 for (Long memberId : memberIds) {
-                    if (!memberId.equals(senderId)) {
+                    if (!memberId.equals(senderId) || atAll) {
                         sendToUser(memberId, JSONUtil.toJsonStr(
                                 Map.of("type", "message", "data", msg)
                         ));

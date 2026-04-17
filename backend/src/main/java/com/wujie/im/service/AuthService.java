@@ -37,6 +37,7 @@ public class AuthService {
         user.setPhone(phone);
         user.setEmail(email);
         user.setStatus(1);
+        user.setRole("USER");
         user.setUserStatus("ONLINE");
         userMapper.insert(user);
 
@@ -74,6 +75,7 @@ public class AuthService {
         result.put("refreshToken", refreshToken);
         result.put("userId", String.valueOf(user.getId()));
         result.put("username", user.getUsername());
+        result.put("role", user.getRole() != null ? user.getRole() : "USER");
         return result;
     }
 

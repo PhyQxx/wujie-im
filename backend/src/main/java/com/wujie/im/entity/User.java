@@ -13,6 +13,7 @@ public class User {
     private String password;
     private String phone;
     private String email;
+    private String role;
     private Integer status;
     private String userStatus;
     private LocalDateTime lastActiveTime;
@@ -22,4 +23,12 @@ public class User {
     private LocalDateTime updateTime;
     @TableLogic
     private Integer deleted;
+
+    // 来自 user_profile 表，非持久化
+    @TableField(exist = false)
+    private String nickname;
+    @TableField(exist = false)
+    private String avatar;
+    @TableField(exist = false)
+    private String signature;
 }

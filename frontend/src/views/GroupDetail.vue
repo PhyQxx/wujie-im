@@ -1,169 +1,296 @@
 <template>
   <div class="group-detail">
-    <div class="group-header">
-      <el-avatar :size="60" :src="group?.avatar" :icon="UserFilled">{{ group?.name?.[0] }}</el-avatar>
-      <div class="group-info">
-        <h2>{{ group?.name }}</h2>
-        <p>{{ members.length }} 名成员</p>
-        <el-tag v-if="group?.type === 'PRIVATE'" size="small" type="warning">私密群</el-tag>
-        <el-tag v-else size="small" type="success">公开群</el-tag>
+    <!-- 左侧成员列表 -->
+    <div class="member-list-panel">
+      <div class="panel-header">
+        <h2>{{ group?.name || '群组' }}</h2>
+      </div>
+
+      <div class="tabs">
+        <button class="tab" :class="{ active: tab === 'members' }" @click="tab = 'members'">成员</button>
+        <button class="tab" :class="{ active: tab === 'chat' }" @click="tab = 'chat'">群聊记录</button>
+      </div>
+
+      <div class="search-bar">
+        <input type="text" v-model="memberSearch" placeholder="搜索成员..." />
+      </div>
+
+      <div v-if="tab === 'members'" class="member-list">
+        <div
+          v-for="m in filteredMembers"
+          :key="m.userId"
+          class="member-item"
+        >
+          <div class="member-avatar" :style="{ background: getAvatarBg(m) }">
+            {{ m.user?.username?.[0] || '?' }}
+          </div>
+          <div class="member-info">
+            <div class="member-name">
+              {{ m.user?.username }}
+              <el-tag v-if="m.role === 'OWNER'" type="danger" size="small">群主</el-tag>
+              <el-tag v-else-if="m.role === 'ADMIN'" type="warning" size="small">管理员</el-tag>
+            </div>
+            <div class="member-status" :class="{ online: m.user?.userStatus === 'ONLINE' }">
+              {{ m.user?.userStatus === 'ONLINE' ? '在线' : '离线' }}
+            </div>
+          </div>
+        </div>
+        <div v-if="!filteredMembers.length" class="empty">暂无成员</div>
+      </div>
+
+      <div v-else class="chat-record-list">
+        <div v-if="!chatRecords.length" class="empty">暂无聊天记录</div>
+        <div v-for="msg in chatRecords" :key="msg.id" class="chat-record-item">
+          <div class="record-avatar">{{ msg.sender?.username?.[0] }}</div>
+          <div class="record-info">
+            <div class="record-name">{{ msg.sender?.username }}</div>
+            <div class="record-content">{{ msg.content }}</div>
+          </div>
+          <div class="record-time">{{ formatTime(msg.createTime) }}</div>
+        </div>
       </div>
     </div>
 
-    <el-tabs v-model="activeTab">
-      <el-tab-pane label="成员">
-        <GroupMemberList :group-id="Number(route.params.id)" />
-      </el-tab-pane>
-      <el-tab-pane label="公告">
-        <div class="announcement-section">
-          <div v-if="!editingAnnouncement">
-            <div class="announcement-content">{{ group?.announcement || '暂无公告' }}</div>
-            <el-button v-if="canManage" size="small" type="primary" @click="editingAnnouncement = true" style="margin-top:12px">
-              {{ group?.announcement ? '编辑公告' : '发布公告' }}
-            </el-button>
-          </div>
-          <div v-else>
-            <el-input v-model="announcementText" type="textarea" :rows="4" placeholder="请输入群公告..." />
-            <div style="margin-top:8px">
-              <el-button size="small" type="primary" @click="saveAnnouncement">保存</el-button>
-              <el-button size="small" @click="editingAnnouncement = false">取消</el-button>
-            </div>
-          </div>
+    <!-- 右侧群详情 -->
+    <div class="group-info-panel">
+      <div class="info-header">
+        <h3>{{ group?.name }}</h3>
+        <div class="member-count">{{ members.length }} 位成员</div>
+      </div>
+
+      <div class="info-section">
+        <div class="info-item">
+          <span class="info-label">群公告</span>
+          <span class="info-value announcement">{{ group?.announcement || '暂无公告' }}</span>
         </div>
-      </el-tab-pane>
-      <el-tab-pane label="入群申请" v-if="canManage">
-        <div class="request-list">
-          <div v-for="req in joinRequests" :key="req.id" class="request-item">
-            <el-avatar :size="36">{{ req.userId }}</el-avatar>
-            <div class="req-info">
-              <span>用户ID: {{ req.userId }}</span>
-              <span class="req-reason">{{ req.reason || '申请加入' }}</span>
-            </div>
-            <div v-if="req.status === 'PENDING'" class="req-actions">
-              <el-button type="success" size="small" @click="handleRequest(req.id, 'AGREE')">同意</el-button>
-              <el-button type="danger" size="small" @click="handleRequest(req.id, 'REJECT')">拒绝</el-button>
-            </div>
-            <el-tag v-else :type="req.status === 'AGREED' ? 'success' : 'danger'" size="small">
-              {{ req.status === 'AGREED' ? '已同意' : '已拒绝' }}
-            </el-tag>
-          </div>
-          <div v-if="!joinRequests.length" class="empty">暂无入群申请</div>
+        <div class="info-item">
+          <span class="info-label">群号</span>
+          <span class="info-value">{{ groupId }}</span>
         </div>
-      </el-tab-pane>
-      <el-tab-pane label="群设置" v-if="canManage">
-        <el-form label-width="80px" style="max-width:400px">
-          <el-form-item label="群名称">
-            <el-input v-model="editForm.name" />
-          </el-form-item>
-          <el-form-item label="群公告">
-            <el-input v-model="editForm.announcement" type="textarea" :rows="3" />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="saveGroupInfo">保存</el-button>
-          </el-form-item>
-        </el-form>
-        <div style="margin-top:24px">
-          <el-button type="danger" @click="handleDissolve">解散群聊</el-button>
-          <el-button @click="handleLeave">退出群聊</el-button>
+        <div class="info-item">
+          <span class="info-label">群类型</span>
+          <span class="info-value">{{ group?.type === 'PRIVATE' ? '私密群' : '公开群' }}</span>
         </div>
-      </el-tab-pane>
-    </el-tabs>
+        <div class="info-item">
+          <span class="info-label">创建时间</span>
+          <span class="info-value">{{ group?.createTime ? formatDate(group.createTime) : '-' }}</span>
+        </div>
+      </div>
+
+      <div v-if="canManage" class="info-actions">
+        <button class="btn-primary" @click="router.push(`/group/${groupId}/settings`)">编辑群信息</button>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useGroupStore } from '@/stores/group'
 import { useUserStore } from '@/stores/user'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { UserFilled } from '@element-plus/icons-vue'
-import GroupMemberList from '@/components/GroupMemberList.vue'
+import type { GroupMember } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
 const groupStore = useGroupStore()
 const userStore = useUserStore()
 
-const activeTab = ref('members')
-const editingAnnouncement = ref(false)
-const announcementText = ref('')
-const joinRequests = ref<any[]>([])
-const editForm = ref({ name: '', announcement: '' })
+const tab = ref('members')
+const memberSearch = ref('')
+const chatRecords = ref<any[]>([])
 
 const groupId = computed(() => Number(route.params.id))
 const members = computed(() => groupStore.members)
-const group = computed(() => {
-  const g = groupStore.groups.find(g => g.id === groupId.value)
-  if (g) {
-    editForm.value.name = g.name || ''
-    editForm.value.announcement = g.announcement || ''
-    announcementText.value = g.announcement || ''
-  }
-  return g
-})
+const group = computed(() => groupStore.groups.find(g => g.id === groupId.value))
 
 const currentUserId = computed(() => userStore.currentUser?.id)
 const currentMember = computed(() => members.value.find(m => m.userId === currentUserId.value))
 const canManage = computed(() => currentMember.value && (currentMember.value.role === 'OWNER' || currentMember.value.role === 'ADMIN'))
 
+const filteredMembers = computed(() => {
+  if (!memberSearch.value) return members.value
+  return members.value.filter(m =>
+    m.user?.username?.includes(memberSearch.value)
+  )
+})
+
 onMounted(async () => {
   await groupStore.fetchGroups()
   await groupStore.fetchMembers(groupId.value)
-  await loadJoinRequests()
 })
 
-watch(activeTab, async (tab) => {
-  if (tab === '入群申请') await loadJoinRequests()
-})
-
-async function loadJoinRequests() {
-  const res = await groupStore.getJoinRequests(groupId.value)
-  joinRequests.value = res.data || []
+function getAvatarBg(m: GroupMember) {
+  const colors = ['#DBEAFE', '#D1FAE5', '#FCE7F3', '#FEF3C7', '#FEE2E2', '#F3E8FF']
+  const name = m.user?.username || ''
+  return colors[name.charCodeAt(0) % colors.length]
 }
 
-async function handleRequest(requestId: number, action: string) {
-  await groupStore.handleJoinRequest(requestId, action as 'agree' | 'reject')
-  ElMessage.success(action === 'AGREE' ? '已同意' : '已拒绝')
-  await loadJoinRequests()
+function formatTime(time?: string) {
+  if (!time) return ''
+  const d = new Date(time)
+  const now = new Date()
+  const diff = now.getTime() - d.getTime()
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return Math.floor(diff / 60000) + '分钟前'
+  if (diff < 86400000) return Math.floor(diff / 3600000) + '小时前'
+  return d.toLocaleDateString()
 }
 
-async function saveAnnouncement() {
-  await groupStore.updateGroup(groupId.value, { announcement: announcementText.value })
-  editingAnnouncement.value = false
-  ElMessage.success('公告已更新')
-}
-
-async function saveGroupInfo() {
-  await groupStore.updateGroup(groupId.value, { name: editForm.value.name, announcement: editForm.value.announcement })
-  ElMessage.success('群信息已保存')
-}
-
-async function handleLeave() {
-  await ElMessageBox.confirm('确定要退出该群吗？', '提示', { type: 'warning' })
-  await groupStore.leaveGroup(groupId.value)
-  ElMessage.success('已退出群聊')
-  router.push('/conversation')
-}
-
-async function handleDissolve() {
-  await ElMessageBox.confirm('确定要解散该群吗？此操作不可恢复！', '警告', { type: 'error' })
-  await groupStore.dissolveGroup(groupId.value)
-  ElMessage.success('群已解散')
-  router.push('/conversation')
+function formatDate(date?: string) {
+  if (!date) return '-'
+  return new Date(date).toLocaleDateString()
 }
 </script>
 
 <style scoped>
-.group-detail { padding: 24px; height: 100%; overflow: auto; }
-.group-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
-.group-info h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-.group-info p { color: var(--text-secondary); font-size: 14px; margin-bottom: 6px; }
-.announcement-content { padding: 16px; background: var(--surface-2); border-radius: 8px; color: var(--text-secondary); white-space: pre-wrap; }
-.request-list { display: flex; flex-direction: column; gap: 8px; }
-.request-item { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--surface-2); border-radius: 8px; }
-.req-info { flex: 1; display: flex; flex-direction: column; }
-.req-reason { font-size: 12px; color: var(--text-muted); }
-.req-actions { display: flex; gap: 8px; }
-.empty { text-align: center; color: var(--text-muted); padding: 32px; }
+.group-detail {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+.member-list-panel {
+  width: 360px;
+  border-right: 1px solid var(--border, #E5E7EB);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.panel-header {
+  padding: 16px;
+  border-bottom: 1px solid var(--border, #E5E7EB);
+}
+.panel-header h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.tabs {
+  display: flex;
+  padding: 8px 12px;
+  gap: 6px;
+  border-bottom: 1px solid var(--border, #E5E7EB);
+}
+.tab {
+  flex: 1;
+  height: 30px;
+  border: none;
+  background: #F3F4F6;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #6B7280;
+  cursor: pointer;
+}
+.tab.active { background: #4F46E5; color: white; }
+.search-bar {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border, #E5E7EB);
+}
+.search-bar input {
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border, #E5E7EB);
+  border-radius: 6px;
+  font-size: 12px;
+  outline: none;
+  background: var(--surface-2, #F9FAFB);
+}
+.member-list,
+.chat-record-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+.member-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.member-item:hover { background: #F3F4F6; }
+.member-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  flex-shrink: 0;
+}
+.member-info { flex: 1; }
+.member-name {
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.member-status { font-size: 11px; color: #9CA3AF; }
+.member-status.online { color: #10B981; }
+.chat-record-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 8px;
+  border-bottom: 1px solid #F3F4F6;
+}
+.record-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #DBEAFE;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #2563EB;
+  flex-shrink: 0;
+}
+.record-info { flex: 1; min-width: 0; }
+.record-name { font-size: 12px; font-weight: 500; margin-bottom: 2px; }
+.record-content { font-size: 12px; color: #6B7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.record-time { font-size: 10px; color: #9CA3AF; flex-shrink: 0; }
+.empty { text-align: center; color: #9CA3AF; padding: 32px; font-size: 13px; }
+
+/* 右侧群详情 */
+.group-info-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 24px;
+  overflow-y: auto;
+}
+.info-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+.info-header h3 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.member-count { font-size: 13px; color: #6B7280; }
+.info-section {
+  background: var(--surface-2, #F9FAFB);
+  border-radius: 12px;
+  padding: 16px;
+}
+.info-item {
+  display: flex;
+  padding: 12px 0;
+  border-bottom: 1px solid #E5E7EB;
+}
+.info-item:last-child { border-bottom: none; }
+.info-label { width: 80px; font-size: 13px; color: #6B7280; flex-shrink: 0; }
+.info-value { flex: 1; font-size: 13px; }
+.info-value.announcement { color: #111827; white-space: pre-wrap; }
+.info-actions { margin-top: 24px; }
+.btn-primary {
+  width: 100%;
+  height: 40px;
+  background: #4F46E5;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
 </style>

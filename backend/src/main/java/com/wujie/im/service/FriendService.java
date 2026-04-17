@@ -82,10 +82,12 @@ public class FriendService {
             FriendRelation r1 = new FriendRelation();
             r1.setUserId(req.getFromUserId());
             r1.setFriendId(req.getToUserId());
+            r1.setGroupId(1L); // 默认分组
             friendRelationMapper.insert(r1);
             FriendRelation r2 = new FriendRelation();
             r2.setUserId(req.getToUserId());
             r2.setFriendId(req.getFromUserId());
+            r2.setGroupId(1L);
             friendRelationMapper.insert(r2);
         } else if ("REJECT".equals(action)) {
             req.setStatus("REJECTED");
@@ -93,14 +95,18 @@ public class FriendService {
         }
     }
 
-    public List<User> getFriends(Long userId) {
+    public List<Map<String, Object>> getFriends(Long userId) {
         List<FriendRelation> relations = friendRelationMapper.selectList(
                 new LambdaQueryWrapper<FriendRelation>().eq(FriendRelation::getUserId, userId)
         );
         return relations.stream().map(r -> {
             User u = userMapper.selectById(r.getFriendId());
             if (u != null) u.setPassword(null);
-            return u;
+            Map<String, Object> map = new HashMap<>();
+            map.put("user", u);
+            map.put("groupId", r.getGroupId());
+            map.put("remark", r.getRemark());
+            return map;
         }).toList();
     }
 
@@ -115,5 +121,29 @@ public class FriendService {
                         .eq(FriendRelation::getUserId, friendId)
                         .eq(FriendRelation::getFriendId, userId)
         );
+    }
+
+    public void moveFriendToGroup(Long userId, Long friendId, Long groupId) {
+        FriendRelation relation = friendRelationMapper.selectOne(
+                new LambdaQueryWrapper<FriendRelation>()
+                        .eq(FriendRelation::getUserId, userId)
+                        .eq(FriendRelation::getFriendId, friendId)
+        );
+        if (relation != null) {
+            relation.setGroupId(groupId);
+            friendRelationMapper.updateById(relation);
+        }
+    }
+
+    public void setFriendRemark(Long userId, Long friendId, String remark) {
+        FriendRelation relation = friendRelationMapper.selectOne(
+                new LambdaQueryWrapper<FriendRelation>()
+                        .eq(FriendRelation::getUserId, userId)
+                        .eq(FriendRelation::getFriendId, friendId)
+        );
+        if (relation != null) {
+            relation.setRemark(remark);
+            friendRelationMapper.updateById(relation);
+        }
     }
 }

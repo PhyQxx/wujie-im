@@ -13,6 +13,9 @@ export const useUserStore = defineStore('user', () => {
     localStorage.setItem('accessToken', res.data.accessToken)
     localStorage.setItem('refreshToken', res.data.refreshToken)
     localStorage.setItem('userId', String(res.data.userId))
+    const role = res.data.role || 'USER'
+    localStorage.setItem('userRole', role)
+    localStorage.setItem('isAdmin', role === 'ADMIN' ? 'true' : 'false')
     await fetchCurrentUser()
     return res
   }
@@ -30,9 +33,9 @@ export const useUserStore = defineStore('user', () => {
 
   async function updateProfile(data: Partial<User>) {
     const userId = localStorage.getItem('userId')
-    const res = await request.put(`/user/${userId}`, data)
-    currentUser.value = res.data
-    return res
+    await request.put('/user/profile', { userId: Number(userId), ...data })
+    // 重新获取用户信息以反映更新
+    await fetchCurrentUser()
   }
 
   async function updateStatus(status: string) {
@@ -47,6 +50,8 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('accessToken')
     localStorage.removeItem('refreshToken')
     localStorage.removeItem('userId')
+    localStorage.removeItem('isAdmin')
+    localStorage.removeItem('userRole')
   }
 
   return { currentUser, token, login, register, fetchCurrentUser, updateProfile, updateStatus, logout }

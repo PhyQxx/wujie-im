@@ -26,6 +26,14 @@ public class MessageService {
     private WsHandler wsHandler;
 
     public Message sendMessage(Long senderId, Long conversationId, String content, String contentType) {
+        return sendMessage(senderId, conversationId, content, contentType, null, null);
+    }
+
+    public Message sendMessage(Long senderId, Long conversationId, String content, String contentType, String metaStr) {
+        return sendMessage(senderId, conversationId, content, contentType, metaStr, null);
+    }
+
+    public Message sendMessage(Long senderId, Long conversationId, String content, String contentType, String metaStr, Long replyId) {
         // 检查群聊禁言
         Conversation conv = conversationMapper.selectById(conversationId);
         if (conv != null && "GROUP".equals(conv.getType())) {
@@ -44,6 +52,8 @@ public class MessageService {
         msg.setSenderId(senderId);
         msg.setContent(content);
         msg.setContentType(contentType != null ? contentType : "TEXT");
+        msg.setMeta(metaStr);
+        msg.setReplyId(replyId);
         msg.setStatus("SENT");
         messageMapper.insert(msg);
 

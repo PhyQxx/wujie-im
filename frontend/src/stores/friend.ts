@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import type { User, FriendRequest } from '@/types'
 import request from '@/utils/request'
 import wsClient from '@/utils/websocket'
+import { useUserStore } from './user'
 
 export const useFriendStore = defineStore('friend', () => {
   const friends = ref<User[]>([])
@@ -20,35 +21,45 @@ export const useFriendStore = defineStore('friend', () => {
   async function fetchFriends() {
     loading.value = true
     try {
-      const res = await request.get('/friend/list')
-      friends.value = res.data || []
+      const userId = localStorage.getItem('userId')
+      if (!userId) return
+      const res = await request.get(`/friend/list/${userId}`)
+      friends.value = (res.data || []).map((item: any) => item.user)
     } finally {
       loading.value = false
     }
   }
 
   async function fetchRequests() {
-    const res = await request.get('/friend/request/list')
+    const userId = localStorage.getItem('userId')
+    if (!userId) return
+    const res = await request.get(`/friend/requests/${userId}`)
     requests.value = res.data || []
   }
 
   async function sendRequest(toUserId: number, reason?: string) {
-    return await request.post('/friend/request', { toUserId, reason })
+    const userId = localStorage.getItem('userId')
+    return await request.post('/friend/request', {
+      fromUserId: userId,
+      toUserId,
+      reason
+    })
   }
 
   async function handleRequest(requestId: number, action: 'agree' | 'reject') {
-    await request.put(`/friend/request/${requestId}/${action}`)
+    await request.put(`/friend/request/${requestId}?action=${action.toUpperCase()}`)
     await fetchRequests()
     if (action === 'agree') await fetchFriends()
   }
 
   async function deleteFriend(friendId: number) {
-    await request.delete(`/friend/${friendId}`)
+    const userStore = useUserStore()
+    await request.delete(`/friend/${userStore.currentUser?.id}/${friendId}`)
     friends.value = friends.value.filter(f => f.id !== friendId)
   }
 
   async function searchUsers(keyword: string) {
-    const res = await request.get('/user/search', { params: { keyword } })
+    const res = await request.get('/user/list', { params: { keyword } })
     return res.data || []
   }
 

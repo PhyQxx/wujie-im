@@ -3,6 +3,7 @@ export interface User {
   username: string
   phone?: string
   email?: string
+  role?: string
   status: number
   userStatus: 'ONLINE' | 'OFFLINE' | 'AWAY' | 'DND'
   lastActiveTime?: string

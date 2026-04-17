@@ -21,10 +21,11 @@ export const useGroupStore = defineStore('group', () => {
   const loading = ref(false)
 
   async function fetchGroups() {
-    const userStore = useUserStore()
     loading.value = true
     try {
-      const res = await request.get(`/group/list/${userStore.currentUser?.id}`)
+      const userId = localStorage.getItem('userId')
+      if (!userId) return
+      const res = await request.get(`/group/list/${userId}`)
       groups.value = res.data || []
     } finally {
       loading.value = false
@@ -32,11 +33,11 @@ export const useGroupStore = defineStore('group', () => {
   }
 
   async function createGroup(name: string, memberIds: number[], type: 'PUBLIC' | 'PRIVATE' = 'PUBLIC') {
-    const userStore = useUserStore()
+    const userId = localStorage.getItem('userId')
     const res = await request.post('/group/create', {
       name,
       type,
-      ownerId: userStore.currentUser?.id,
+      ownerId: userId,
       memberIds
     })
     groups.value.unshift(res.data)

@@ -1,0 +1,26 @@
+package com.wujie.im.config;
+
+import lombok.Data;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.context.annotation.Bean;
+import org.springframework.stereotype.Component;
+import org.apache.commons.net.ftp.FTPClient;
+
+@Data
+@Component
+@ConfigurationProperties(prefix = "ftp")
+public class FtpConfig {
+    private String host = "127.0.0.1";
+    private int port = 21;
+    private String username = "anonymous";
+    private String password = "";
+    private String basePath = "/";
+    private String urlPrefix = "http://127.0.0.1";
+
+    @Bean
+    public FTPClient ftpClient() {
+        FTPClient client = new FTPClient();
+        client.setControlEncoding("UTF-8");
+        return client;
+    }
+}

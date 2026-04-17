@@ -4,7 +4,12 @@
     <div class="msg-body">
       <div v-if="showSenderName" class="msg-sender">
         <span v-if="isAiMessage" class="ai-badge">AI</span>
+        <span v-if="isAtAll" class="at-all-badge">@全体</span>
         {{ senderName }}
+      </div>
+      <!-- 回复引用内容 -->
+      <div v-if="message.replyId" class="reply-quote">
+        <span class="reply-arrow">↳</span> {{ message.meta }}
       </div>
       <div class="msg-bubble">
         <div v-if="message.recall" class="recalled">消息已撤回</div>
@@ -19,6 +24,9 @@
           <div v-else-if="message.contentType === 'SYSTEM'" class="system-msg">{{ message.content }}</div>
           <div v-else class="text-msg">{{ message.content }}</div>
         </template>
+      </div>
+      <div class="msg-actions">
+        <button v-if="!message.recall" class="msg-action-btn" @click="$emit('reply', message)" title="回复">↩</button>
       </div>
       <div class="msg-time">
         {{ formatTime(message.createTime) }}
@@ -40,14 +48,17 @@ import dayjs from 'dayjs'
 import type { Message } from '@/types'
 
 const props = defineProps<{ message: Message; isMine: boolean }>()
+defineEmits<{ reply: [msg: Message] }>()
 
 const showSenderName = computed(() => !props.isMine && props.message.senderName)
 const senderName = computed(() => props.message.senderName || '用户')
 const isAiMessage = computed(() => props.message.contentType === 'AI')
+const isAtAll = computed(() => props.message.meta?.includes('atAll'))
 
 const avatarText = computed(() => {
   if (props.isMine) return '我'
   if (isAiMessage.value) return '🤖'
+  if (isAtAll.value) return '@'
   return senderName.value[0] || '?'
 })
 
@@ -122,6 +133,28 @@ function formatTime(time: string) {
   margin-right: 4px;
   font-weight: 600;
 }
+.at-all-badge {
+  font-size: 10px; background: #EF4444; color: white; padding: 1px 5px;
+  border-radius: 4px; margin-right: 4px; font-weight: 600;
+}
+.reply-quote {
+  font-size: 11px; color: var(--text-secondary, #6B7280); padding: 4px 8px;
+  background: var(--surface-3, #F3F4F6); border-left: 2px solid var(--primary, #4F46E5);
+  border-radius: 0 4px 4px 0; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.reply-arrow { color: var(--primary, #4F46E5); margin-right: 4px; }
+.msg-actions {
+  display: none; position: absolute; top: -16px;
+  right: 0; gap: 2px;
+}
+.message-row:hover .msg-actions { display: flex; }
+.msg-action-btn {
+  width: 20px; height: 20px; border: none; background: var(--surface-3, #F3F4F6);
+  border-radius: 4px; cursor: pointer; font-size: 12px;
+  color: var(--text-secondary, #6B7280); display: flex; align-items: center; justify-content: center;
+}
+.msg-action-btn:hover { background: var(--primary, #4F46E5); color: white; }
+.msg-body { position: relative; }
 .msg-bubble {
   padding: 8px 12px;
   border-radius: 16px;

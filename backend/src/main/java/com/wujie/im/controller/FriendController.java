@@ -51,13 +51,33 @@ public class FriendController {
     }
 
     @GetMapping("/list/{userId}")
-    public Result<List<User>> getFriends(@PathVariable Long userId) {
+    public Result<List<Map<String, Object>>> getFriends(@PathVariable Long userId) {
         return Result.success(friendService.getFriends(userId));
     }
 
     @DeleteMapping("/{userId}/{friendId}")
     public Result<Void> deleteFriend(@PathVariable Long userId, @PathVariable Long friendId) {
         friendService.deleteFriend(userId, friendId);
+        return Result.success();
+    }
+
+    @PutMapping("/move")
+    public Result<Void> moveFriendToGroup(@RequestBody Map<String, Object> params) {
+        friendService.moveFriendToGroup(
+                Long.valueOf(params.get("userId").toString()),
+                Long.valueOf(params.get("friendId").toString()),
+                Long.valueOf(params.get("groupId").toString())
+        );
+        return Result.success();
+    }
+
+    @PutMapping("/remark")
+    public Result<Void> setFriendRemark(@RequestBody Map<String, Object> params) {
+        friendService.setFriendRemark(
+                Long.valueOf(params.get("userId").toString()),
+                Long.valueOf(params.get("friendId").toString()),
+                (String) params.get("remark")
+        );
         return Result.success();
     }
 }

@@ -5,18 +5,15 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("friend_relation")
-public class FriendRelation {
+@TableName("system_config")
+public class SystemConfig {
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Long userId;
-    private Long friendId;
-    private Long groupId;    // 好友分组ID
-    private String remark;
+    private String configKey;
+    private String configValue;
+    private String description;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
-    @TableLogic
-    private Integer deleted;
 }

@@ -29,6 +29,12 @@ public class AdminController {
     private RobotMapper robotMapper;
     @Autowired
     private GroupMemberMapper groupMemberMapper;
+    @Autowired
+    private AiConfigMapper aiConfigMapper;
+    @Autowired
+    private SystemConfigMapper systemConfigMapper;
+    @Autowired
+    private ConversationMapper conversationMapper;
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     // ==================== 认证 ====================
@@ -45,6 +51,13 @@ public class AdminController {
         result.put("username", admin.getUsername());
         result.put("role", admin.getRole());
         return Result.success(result);
+    }
+
+    @GetMapping("/check")
+    public Result<Boolean> checkAdmin() {
+        // 管理员表有记录则为管理员
+        long count = adminUserMapper.selectCount(null);
+        return Result.success(count > 0);
     }
 
     // ==================== 统计数据看板 ====================
@@ -120,7 +133,7 @@ public class AdminController {
     }
 
     @GetMapping("/groups/{groupId}/members")
-    public Result<Long> getGroupMemberCount(@PathVariable Long groupId) {
+    public Result<Map<String, Object>> getGroupMemberCount(@PathVariable Long groupId) {
         long count = groupMemberMapper.selectCount(
                 new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getGroupId, groupId)
         );
@@ -160,5 +173,76 @@ public class AdminController {
     public Result<Void> deleteSensitiveWord(@PathVariable Long id) {
         sensitiveWordMapper.deleteById(id);
         return Result.success();
+    }
+
+    // ==================== AI配置管理 ====================
+    @GetMapping("/ai-config")
+    public Result<List<AiConfig>> listAiConfigs(@RequestParam(required = false) Long robotId) {
+        LambdaQueryWrapper<AiConfig> q = new LambdaQueryWrapper<>();
+        if (robotId != null) q.eq(AiConfig::getRobotId, robotId);
+        return Result.success(aiConfigMapper.selectList(q));
+    }
+
+    @PostMapping("/ai-config")
+    public Result<Void> saveAiConfig(@RequestBody AiConfig config) {
+        if (config.getId() != null) {
+            aiConfigMapper.updateById(config);
+        } else {
+            aiConfigMapper.insert(config);
+        }
+        return Result.success();
+    }
+
+    @DeleteMapping("/ai-config/{id}")
+    public Result<Void> deleteAiConfig(@PathVariable Long id) {
+        aiConfigMapper.deleteById(id);
+        return Result.success();
+    }
+
+    // ==================== 系统配置管理 ====================
+    @GetMapping("/system-configs")
+    public Result<List<SystemConfig>> listSystemConfigs() {
+        return Result.success(systemConfigMapper.selectList(null));
+    }
+
+    @PutMapping("/system-config/{key}")
+    public Result<Void> updateSystemConfig(@PathVariable String key, @RequestBody Map<String, String> body) {
+        SystemConfig config = systemConfigMapper.selectOne(
+                new LambdaQueryWrapper<SystemConfig>().eq(SystemConfig::getConfigKey, key)
+        );
+        if (config == null) {
+            config = new SystemConfig();
+            config.setConfigKey(key);
+            config.setConfigValue(body.get("value"));
+            systemConfigMapper.insert(config);
+        } else {
+            config.setConfigValue(body.get("value"));
+            systemConfigMapper.updateById(config);
+        }
+        return Result.success();
+    }
+
+    // ==================== 群消息查看 ====================
+    @GetMapping("/group-messages/{groupId}")
+    public Result<List<Message>> getGroupMessages(
+            @PathVariable Long groupId,
+            @RequestParam(defaultValue = "50") int limit,
+            @RequestParam(required = false) Long beforeId) {
+        // 查找群会话
+        Conversation conv = conversationMapper.selectOne(
+                new LambdaQueryWrapper<Conversation>()
+                        .eq(Conversation::getType, "GROUP")
+                        .eq(Conversation::getTypeId, groupId)
+        );
+        if (conv == null) return Result.success(List.of());
+
+        LambdaQueryWrapper<Message> q = new LambdaQueryWrapper<Message>()
+                .eq(Message::getConversationId, conv.getId())
+                .eq(Message::getRecall, 0)
+                .orderByDesc(Message::getId);
+        if (beforeId != null) q.lt(Message::getId, beforeId);
+        q.last("LIMIT " + limit);
+        List<Message> msgs = messageMapper.selectList(q);
+        return Result.success(msgs);
     }
 }

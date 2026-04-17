@@ -53,7 +53,7 @@ export const useMessageStore = defineStore('message', () => {
     }
   }
 
-  async function sendMessage(params: { conversationId: number; content: string; contentType: string; replyId?: number }) {
+  async function sendMessage(params: { conversationId: number; content: string; contentType: string; meta?: string; replyId?: number }) {
     const tempId = Date.now()
     const tempMsg: Message = {
       id: tempId,
@@ -61,12 +61,14 @@ export const useMessageStore = defineStore('message', () => {
       senderId: Number(localStorage.getItem('userId')),
       content: params.content,
       contentType: params.contentType as any,
+      meta: params.meta,
+      replyId: params.replyId,
       status: 'SENDING',
       createTime: new Date().toISOString()
     }
     messages.value.push(tempMsg)
     try {
-      const res = await request.post('/message/send', params)
+      const res = await request.post('/message/send', { ...params, senderId: Number(localStorage.getItem('userId')) })
       const idx = messages.value.findIndex(m => m.id === tempId)
       if (idx > -1) messages.value[idx] = { ...res.data, status: 'DELIVERED' }
       return res.data

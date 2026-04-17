@@ -5,14 +5,13 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("friend_relation")
-public class FriendRelation {
+@TableName("friend_group")
+public class FriendGroup {
     @TableId(type = IdType.AUTO)
     private Long id;
     private Long userId;
-    private Long friendId;
-    private Long groupId;    // 好友分组ID
-    private String remark;
+    private String name;
+    private Integer sort;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)
