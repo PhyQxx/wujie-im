@@ -51,34 +51,74 @@
       </div>
     </div>
 
-    <!-- 右侧群详情 -->
+    <!-- 右侧详情 -->
     <div class="group-info-panel">
       <div class="info-header">
         <h3>{{ group?.name }}</h3>
         <div class="member-count">{{ members.length }} 位成员</div>
       </div>
 
-      <div class="info-section">
-        <div class="info-item">
-          <span class="info-label">群公告</span>
-          <span class="info-value announcement">{{ group?.announcement || '暂无公告' }}</span>
+      <div class="tabs">
+        <button class="tab" :class="{ active: infoTab === 'info' }" @click="infoTab = 'info'">群信息</button>
+        <button class="tab" :class="{ active: infoTab === 'manage' }" @click="infoTab = 'manage'">成员管理</button>
+      </div>
+
+      <!-- 群信息 -->
+      <div v-if="infoTab === 'info'" class="info-content">
+        <div class="info-section">
+          <div class="info-item">
+            <span class="info-label">群公告</span>
+            <span class="info-value announcement">{{ group?.announcement || '暂无公告' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">群号</span>
+            <span class="info-value">{{ groupId }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">群主</span>
+            <span class="info-value">{{ ownerName || '用户' + group?.ownerId }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">类型</span>
+            <span class="info-value">{{ group?.type === 'PRIVATE' ? '私密群' : '公开群' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">创建时间</span>
+            <span class="info-value">{{ group?.createTime ? formatDate(group.createTime) : '-' }}</span>
+          </div>
         </div>
-        <div class="info-item">
-          <span class="info-label">群号</span>
-          <span class="info-value">{{ groupId }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">群类型</span>
-          <span class="info-value">{{ group?.type === 'PRIVATE' ? '私密群' : '公开群' }}</span>
-        </div>
-        <div class="info-item">
-          <span class="info-label">创建时间</span>
-          <span class="info-value">{{ group?.createTime ? formatDate(group.createTime) : '-' }}</span>
+
+        <div v-if="canManage" class="info-actions">
+          <button class="btn-primary" @click="router.push(`/group/${groupId}/settings`)">编辑群信息</button>
         </div>
       </div>
 
-      <div v-if="canManage" class="info-actions">
-        <button class="btn-primary" @click="router.push(`/group/${groupId}/settings`)">编辑群信息</button>
+      <!-- 成员管理 -->
+      <div v-else-if="infoTab === 'manage'" class="manage-content">
+        <div v-if="canManage" class="invite-section">
+          <el-input v-model="inviteUsername" placeholder="输入用户名添加成员" @keydown.enter="handleInvite" style="margin-bottom:8px" />
+          <el-button type="primary" size="small" @click="handleInvite">添加</el-button>
+        </div>
+
+        <div class="member-manage-list">
+          <div v-for="m in members" :key="m.userId" class="member-manage-item">
+            <div class="member-avatar small" :style="{ background: getAvatarBg(m) }">
+              {{ m.user?.username?.[0] || '?' }}
+            </div>
+            <div class="member-info">
+              <div class="member-name">
+                {{ m.user?.username }}
+                <el-tag v-if="m.role === 'OWNER'" type="danger" size="small">群主</el-tag>
+                <el-tag v-else-if="m.role === 'ADMIN'" type="warning" size="small">管理员</el-tag>
+              </div>
+            </div>
+            <div v-if="canManage && m.role !== 'OWNER'" class="member-actions">
+              <el-button v-if="m.role !== 'ADMIN'" size="small" type="warning" @click="handleSetAdmin(m, true)">设管理</el-button>
+              <el-button v-else size="small" @click="handleSetAdmin(m, false)">取消管理</el-button>
+              <el-button size="small" type="danger" @click="handleRemoveMember(m)">移除</el-button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -89,6 +129,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useGroupStore } from '@/stores/group'
 import { useUserStore } from '@/stores/user'
+import { ElMessage } from 'element-plus'
 import type { GroupMember } from '@/types'
 
 const route = useRoute()
@@ -97,8 +138,10 @@ const groupStore = useGroupStore()
 const userStore = useUserStore()
 
 const tab = ref('members')
+const infoTab = ref('info')
 const memberSearch = ref('')
 const chatRecords = ref<any[]>([])
+const inviteUsername = ref('')
 
 const groupId = computed(() => Number(route.params.id))
 const members = computed(() => groupStore.members)
@@ -107,6 +150,10 @@ const group = computed(() => groupStore.groups.find(g => g.id === groupId.value)
 const currentUserId = computed(() => userStore.currentUser?.id)
 const currentMember = computed(() => members.value.find(m => m.userId === currentUserId.value))
 const canManage = computed(() => currentMember.value && (currentMember.value.role === 'OWNER' || currentMember.value.role === 'ADMIN'))
+const ownerName = computed(() => {
+  const owner = members.value.find(m => m.role === 'OWNER')
+  return owner?.user?.username
+})
 
 const filteredMembers = computed(() => {
   if (!memberSearch.value) return members.value
@@ -140,6 +187,49 @@ function formatTime(time?: string) {
 function formatDate(date?: string) {
   if (!date) return '-'
   return new Date(date).toLocaleDateString()
+}
+
+async function handleInvite() {
+  if (!inviteUsername.value.trim()) return
+  try {
+    // 通过用户名搜索用户ID
+    const userRes = await fetchUserByUsername(inviteUsername.value.trim())
+    if (!userRes) {
+      ElMessage.error('用户不存在')
+      return
+    }
+    await groupStore.inviteMembers(groupId.value, [userRes.id])
+    ElMessage.success('添加成功')
+    inviteUsername.value = ''
+    await groupStore.fetchMembers(groupId.value)
+  } catch (e: any) {
+    ElMessage.error(e?.message || '添加失败')
+  }
+}
+
+async function fetchUserByUsername(username: string): Promise<any> {
+  const { userApi } = await import('@/api/user')
+  const res = await userApi.search(username)
+  const users = res.data || []
+  return users.find((u: any) => u.username === username)
+}
+
+async function handleSetAdmin(m: GroupMember, isAdmin: boolean) {
+  try {
+    await groupStore.setAdmin(groupId.value, m.userId, isAdmin)
+    ElMessage.success(isAdmin ? '已设为管理员' : '已取消管理员')
+  } catch (e: any) {
+    ElMessage.error(e?.message || '操作失败')
+  }
+}
+
+async function handleRemoveMember(m: GroupMember) {
+  try {
+    await groupStore.removeMember(groupId.value, m.userId)
+    ElMessage.success('已移除')
+  } catch (e: any) {
+    ElMessage.error(e?.message || '移除失败')
+  }
 }
 </script>
 
@@ -219,6 +309,7 @@ function formatDate(date?: string) {
   color: white;
   flex-shrink: 0;
 }
+.member-avatar.small { width: 32px; height: 32px; font-size: 12px; }
 .member-info { flex: 1; }
 .member-name {
   font-size: 13px;
@@ -259,15 +350,18 @@ function formatDate(date?: string) {
   flex: 1;
   display: flex;
   flex-direction: column;
-  padding: 24px;
   overflow-y: auto;
 }
 .info-header {
   text-align: center;
-  margin-bottom: 24px;
+  padding: 24px 24px 0;
 }
 .info-header h3 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
 .member-count { font-size: 13px; color: #6B7280; }
+.info-content {
+  padding: 16px 24px;
+  flex: 1;
+}
 .info-section {
   background: var(--surface-2, #F9FAFB);
   border-radius: 12px;
@@ -292,5 +386,37 @@ function formatDate(date?: string) {
   border-radius: 8px;
   font-size: 14px;
   cursor: pointer;
+}
+
+/* 成员管理 */
+.manage-content {
+  padding: 16px 24px;
+  flex: 1;
+  overflow-y: auto;
+}
+.invite-section {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  align-items: center;
+}
+.member-manage-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.member-manage-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface-2, #F9FAFB);
+  border-radius: 8px;
+}
+.member-manage-item .member-info { flex: 1; }
+.member-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
 }
 </style>

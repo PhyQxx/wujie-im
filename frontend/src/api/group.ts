@@ -5,6 +5,8 @@ export const groupApi = {
   get: (groupId: number) => request.get(`/group/${groupId}`),
   create: (data: { name: string; avatar?: string; type?: string; ownerId: number }) =>
     request.post('/group/create', data),
+  join: (groupId: number, userId: number, reason?: string) =>
+    request.post('/group/join', { groupId, userId, reason: reason || '' }),
   update: (groupId: number, data: { name?: string; avatar?: string; announcement?: string }, operatorId: number) =>
     request.put(`/group/update/${groupId}?operatorId=${operatorId}`, data),
   members: (groupId: number) => request.get(`/group/members/${groupId}`),

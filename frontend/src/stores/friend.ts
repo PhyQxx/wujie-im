@@ -58,8 +58,8 @@ export const useFriendStore = defineStore('friend', () => {
     friends.value = friends.value.filter(f => f.id !== friendId)
   }
 
-  async function searchUsers(keyword: string) {
-    const res = await request.get('/user/list', { params: { keyword } })
+  async function searchUsers(keyword: string, excludeId?: number) {
+    const res = await request.get('/user/list', { params: { keyword, excludeId } })
     return res.data || []
   }
 

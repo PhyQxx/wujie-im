@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import wsClient from '@/utils/websocket'
 
 // @ts-ignore
 const router = createRouter({

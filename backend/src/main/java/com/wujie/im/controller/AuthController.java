@@ -43,4 +43,15 @@ public class AuthController {
             return Result.error(401, e.getMessage());
         }
     }
+
+    @GetMapping("/debug-verify")
+    public Result<Map<String, Object>> debugVerify(@RequestParam String token) {
+        try {
+            boolean valid = authService.validateToken(token);
+            Long userId = authService.getUserIdFromToken(token);
+            return Result.success(Map.of("valid", valid, "userId", userId, "tokenPrefix", token.substring(0, Math.min(50, token.length()))));
+        } catch (Exception e) {
+            return Result.success(Map.of("valid", false, "error", e.getClass().getSimpleName() + ": " + e.getMessage()));
+        }
+    }
 }

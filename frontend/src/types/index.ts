@@ -18,7 +18,7 @@ export interface Message {
   senderId: number
   senderName?: string
   content: string
-  contentType: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM' | 'CODE' | 'AI'
+  contentType: 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM' | 'CODE' | 'AI' | 'MIXED'
   meta?: any
   status: 'SENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'RECALLED' | 'FAILED'
   recall?: boolean
@@ -46,6 +46,7 @@ export interface GroupInfo {
   announcement?: string
   type: 'PUBLIC' | 'PRIVATE'
   ownerId: number
+  ownerName?: string
   needAudit: boolean
 }
 

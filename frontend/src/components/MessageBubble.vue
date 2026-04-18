@@ -14,15 +14,25 @@
       <div class="msg-bubble">
         <div v-if="message.recall" class="recalled">消息已撤回</div>
         <template v-else>
-          <div v-if="message.contentType === 'TEXT'" class="text-msg">{{ message.content }}</div>
+          <!-- 混合内容（图文混合） -->
+          <template v-if="contentBlocks.length > 1">
+            <div v-for="(block, idx) in contentBlocks" :key="idx" class="content-block">
+              <div v-if="block.type === 'text'" class="text-msg" v-html="renderMarkdown(block.content)" />
+              <div v-else-if="block.type === 'image'" class="image-msg">
+                <el-image :src="block.url" :preview-src-list="[block.url]" fit="cover" class="msg-image" preview-teleported />
+              </div>
+            </div>
+          </template>
+          <!-- 单条图片 -->
           <div v-else-if="message.contentType === 'IMAGE'" class="image-msg">
-            <img :src="message.content" alt="图片" />
+            <el-image :src="message.content" :preview-src-list="[message.content]" fit="cover" class="msg-image" preview-teleported />
           </div>
-          <div v-else-if="message.contentType === 'FILE'" class="file-msg">
-            📎 {{ message.content }}
-          </div>
+          <!-- 单条文件 -->
+          <div v-else-if="message.contentType === 'FILE'" class="file-msg">📎 {{ message.content }}</div>
+          <!-- 系统消息 -->
           <div v-else-if="message.contentType === 'SYSTEM'" class="system-msg">{{ message.content }}</div>
-          <div v-else class="text-msg">{{ message.content }}</div>
+          <!-- 纯文本/Markdown -->
+          <div v-else class="text-msg" v-html="renderMarkdown(message.content)" />
         </template>
       </div>
       <div class="msg-actions">
@@ -45,7 +55,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import dayjs from 'dayjs'
+import { marked } from 'marked'
 import type { Message } from '@/types'
+
+marked.setOptions({ breaks: true })
 
 const props = defineProps<{ message: Message; isMine: boolean }>()
 defineEmits<{ reply: [msg: Message] }>()
@@ -54,6 +67,34 @@ const showSenderName = computed(() => !props.isMine && props.message.senderName)
 const senderName = computed(() => props.message.senderName || '用户')
 const isAiMessage = computed(() => props.message.contentType === 'AI')
 const isAtAll = computed(() => props.message.meta?.includes('atAll'))
+
+// 解析消息内容为内容块数组
+interface ContentBlock { type: 'text' | 'image'; content?: string; url?: string }
+const contentBlocks = computed<ContentBlock[]>(() => {
+  const c = props.message.content
+  if (!c) return []
+  // 尝试解析为 JSON 混合内容
+  if (c.startsWith('[')) {
+    try {
+      const arr = JSON.parse(c)
+      return arr.map((item: any) => ({
+        type: item.type || 'text',
+        content: item.content,
+        url: item.url
+      }))
+    } catch { /* fall through */ }
+  }
+  return []
+})
+
+function renderMarkdown(text: string): string {
+  if (!text) return ''
+  try {
+    return marked.parse(text) as string
+  } catch {
+    return text
+  }
+}
 
 const avatarText = computed(() => {
   if (props.isMine) return '我'
@@ -178,11 +219,12 @@ function formatTime(time: string) {
   border: 1px solid #c7d2fe;
   color: #4F46E5;
 }
-.image-msg img {
+.msg-image {
   max-width: 200px;
   max-height: 200px;
   border-radius: 8px;
   cursor: pointer;
+  display: block;
 }
 .file-msg {
   background: var(--surface-2);
@@ -215,4 +257,15 @@ function formatTime(time: string) {
 .failed-icon { color: #EF4444; }
 .sending-icon { animation: spin 1s linear infinite; display: inline-block; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.content-block { margin-bottom: 4px; }
+.content-block:last-child { margin-bottom: 0; }
+.content-block .text-msg { line-height: 1.5; }
+/* Markdown 样式 */
+.text-msg :deep(a) { color: inherit; text-decoration: underline; }
+.text-msg :deep(code) { background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-size: 12px; font-family: monospace; }
+.text-msg :deep(pre) { background: rgba(0,0,0,0.08); padding: 8px; border-radius: 6px; overflow-x: auto; margin: 4px 0; }
+.text-msg :deep(pre code) { background: none; padding: 0; }
+.text-msg :deep(strong) { font-weight: 600; }
+.text-msg :deep(p) { margin: 0 0 4px 0; }
+.text-msg :deep(p:last-child) { margin-bottom: 0; }
 </style>

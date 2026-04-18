@@ -58,9 +58,14 @@ wujie:
         api-url: https://api.deepseek.com/v1/chat/completions
 
 ftp:
+  # ftp地址
   host: 127.0.0.1
+  # ftp端口
   port: 21
-  username: anonymous
-  password: ""
-  path: /
-  url-prefix: http://ftp.pnkx.top:8
+  # ftp用户名
+  username: admin
+  # ftp密码
+  password: phy0316.
+  # ftp上传路径
+  path: /ftp/
+  url-prefix: https://ftp.pnkx.top:8/ftp

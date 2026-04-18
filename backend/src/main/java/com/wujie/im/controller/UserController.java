@@ -18,7 +18,7 @@ public class UserController {
     @GetMapping("/list")
     public Result<List<User>> listUsers(@RequestParam(required = false) String keyword,
                                          @RequestParam(required = false) Long excludeId) {
-        return Result.success(userService.listUsers(keyword));
+        return Result.success(userService.listUsers(keyword, excludeId));
     }
 
     @GetMapping("/{id}")
@@ -45,5 +45,21 @@ public class UserController {
     public Result<Void> updateProfile(@RequestBody UserProfile profile) {
         userService.updateProfile(profile);
         return Result.success();
+    }
+
+    @GetMapping("/debug-token")
+    public Result<Map<String, Object>> debugToken(@RequestHeader("Authorization") String auth) {
+        String token = auth.replace("Bearer ", "");
+        try {
+            var claims = com.wujie.im.common.JwtUtil.class.getDeclaredField("secret");
+            claims.setAccessible(true);
+            return Result.success(Map.of(
+                "tokenLength", token.length(),
+                "tokenPrefix", token.substring(0, Math.min(50, token.length())),
+                "note", "需要重启后端使代码生效"
+            ));
+        } catch (Exception e) {
+            return Result.success(Map.of("error", e.getMessage()));
+        }
     }
 }

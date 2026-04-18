@@ -7,7 +7,7 @@
         </div>
         <div class="chat-target-info">
           <div class="chat-target-name">{{ getConvName(currentConversation) }}</div>
-          <div class="chat-target-status" :class="{ offline: !isOnline(currentConversation) }">
+          <div v-if="currentConversation.type !== 'GROUP'" class="chat-target-status" :class="{ offline: !isOnline(currentConversation) }">
             {{ isOnline(currentConversation) ? '在线' : '离线' }}
           </div>
         </div>
@@ -24,7 +24,7 @@
         </div>
       </div>
 
-      <div class="messages" ref="messageListRef">
+      <div class="messages" ref="messageListRef" @scroll="onMessageScroll">
         <div class="date-divider"><span>今天</span></div>
         <MessageBubble
           v-for="msg in messages"
@@ -41,6 +41,13 @@
           <span class="reply-label">回复 {{ replyingTo.senderId === currentUserId ? '自己' : '' }}</span>
           <span class="reply-content">{{ replyingTo.content }}</span>
           <button class="reply-close" @click="replyingTo = null">✕</button>
+        </div>
+        <!-- 待发送图片缩略图 -->
+        <div v-if="pendingImages.length" class="pending-images">
+          <div v-for="(url, idx) in pendingImages" :key="idx" class="pending-img-wrap">
+            <img :src="url" class="pending-img" />
+            <button class="pending-img-remove" @click="removePendingImage(idx)">✕</button>
+          </div>
         </div>
         <div class="input-actions-top">
           <el-popover placement="top" :width="320" trigger="click">
@@ -66,15 +73,26 @@
           </button>
         </div>
         <div class="input-row">
-          <textarea
-            ref="textareaRef"
-            class="input-box"
-            v-model="inputText"
-            placeholder="输入消息..."
-            rows="1"
-            @keydown.enter.exact.prevent="sendMessage"
-          ></textarea>
-          <button class="send-btn" @click="sendMessage" :disabled="!inputText.trim() && !uploading">
+          <div class="md-editor-wrap" @click="startEditing">
+            <!-- 渲染层：失去焦点时显示 -->
+            <div v-if="!isEditing && inputText" class="md-render-layer" v-html="getRenderedLines()" />
+            <!-- 编辑层：聚焦时显示 -->
+            <textarea
+              v-if="isEditing"
+              ref="textareaRef"
+              class="md-editor"
+              v-model="inputText"
+              placeholder="输入消息，支持 Markdown..."
+              :rows="editorRows"
+              @focus="isEditing = true"
+              @blur="onEditorBlur"
+              @input="onEditorInput"
+              @keydown.enter.exact.prevent="sendMessage"
+            />
+            <!-- 默认占位：未编辑且无内容时 -->
+            <div v-if="!inputText && !isEditing" class="md-placeholder">输入消息，支持 Markdown...</div>
+          </div>
+          <button class="send-btn" @click="sendMessage" :disabled="!inputText.trim() && !pendingImages.length && !uploading">
             <span v-if="uploading" class="uploading-spinner">⏳</span>
             <template v-else>
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
@@ -93,11 +111,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useConversationStore } from '@/stores/conversation'
 import { useMessageStore } from '@/stores/message'
 import { ElMessage } from 'element-plus'
 import { messageApi } from '@/api/message'
+import { marked } from 'marked'
 import MessageBubble from '@/components/MessageBubble.vue'
 import type { Conversation } from '@/types'
 
@@ -112,6 +131,11 @@ const textareaRef = ref<HTMLTextAreaElement>()
 const uploading = ref(false)
 const replyingTo = ref<any>(null)
 const atAllActive = ref(false)
+const userHasScrolledUp = ref(false)
+const isProgrammaticScroll = ref(false)
+const pendingImages = ref<string[]>([]) // 待发送的图片 URL 列表
+const isEditing = ref(false) // 编辑器是否获得焦点
+const editorRows = ref(1) // textarea 行数
 
 const emojis = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖']
 
@@ -119,13 +143,33 @@ const currentConversation = computed(() => conversationStore.currentConversation
 const messages = computed(() => messageStore.messages)
 const currentUserId = computed(() => Number(localStorage.getItem('userId')))
 
+onMounted(() => { console.log('[ChatPanel mounted] currentConv=' + conversationStore.currentConversation?.id) })
+onUnmounted(() => { console.log('[ChatPanel unmounted]') })
+
 // 切换会话时加载历史消息
 watch(currentConversation, (conv) => {
+  console.log('[watch currentConversation] conv=' + conv?.id + ' type=' + conv?.type)
   if (conv) {
-    messageStore.fetchMessages(conv.id)
-    nextTick(() => scrollToBottom())
+    userHasScrolledUp.value = false // 重置滚动状态
+    messageStore.fetchMessages(conv.id).then(() => {
+      nextTick(() => scrollToBottom())
+    })
   }
 }, { immediate: true })
+
+// 监听消息变化，自动滚动到底部
+// - 新消息来自别人且用户在底部时，自动滚动
+// - 新消息来自自己时，自动滚动（发送后立即可见）
+// - 仅当用户主动向上滑超过100px查看历史时才停止自动滚动
+watch(messages, (newVal, oldVal) => {
+  const addedCount = newVal.length - (oldVal?.length || 0)
+  if (addedCount <= 0) return
+  // 如果用户没有主动上滑，或者新消息是自己发的，自动滚动
+  const lastMsg = newVal[newVal.length - 1]
+  if (!userHasScrolledUp.value || lastMsg.senderId === currentUserId.value) {
+    nextTick(() => scrollToBottom())
+  }
+}, { flush: 'post' })
 
 function getConvName(conv: Conversation) {
   if (conv.type === 'GROUP') return conv.groupInfo?.name || '群组'
@@ -144,45 +188,56 @@ function isOnline(conv: Conversation) {
 }
 
 async function sendMessage() {
-  if (!inputText.value.trim() || !currentConversation.value) return
-  const content = inputText.value
-  inputText.value = ''
+  if ((!inputText.value.trim() && !pendingImages.value.length) || !currentConversation.value) return
   const meta = atAllActive.value ? JSON.stringify({ atAll: true }) : null
   atAllActive.value = false
   const replyId = replyingTo.value?.id || undefined
   replyingTo.value = null
+
+  // 构建消息内容：图文混合 or 纯文本
+  let content: string
+  let contentType = 'TEXT'
+  if (pendingImages.value.length > 0) {
+    const blocks: any[] = []
+    if (inputText.value.trim()) {
+      blocks.push({ type: 'text', content: inputText.value.trim() })
+    }
+    pendingImages.value.forEach(url => blocks.push({ type: 'image', url }))
+    content = JSON.stringify(blocks)
+    contentType = 'MIXED'
+  } else {
+    content = inputText.value.trim()
+  }
+
+  const savedText = inputText.value
+  inputText.value = ''
+  pendingImages.value = []
+
   try {
     await messageStore.sendMessage({
       conversationId: currentConversation.value.id,
       content,
-      contentType: 'TEXT',
+      contentType,
       meta: meta || undefined,
       replyId
     })
     await nextTick()
     scrollToBottom()
   } catch (_e) {
-    inputText.value = content
+    inputText.value = savedText
   }
 }
 
 async function handleImageChange(e: Event) {
   const file = (e.target as HTMLInputElement).files?.[0]
-  if (!file || !currentConversation.value) return
+  if (!file) return
   uploading.value = true
   try {
     const fd = new FormData()
     fd.append('file', file)
     const res = await messageApi.uploadImage(fd)
     if (res.data?.url) {
-      await messageStore.sendMessage({
-        conversationId: currentConversation.value.id,
-        content: res.data.url,
-        contentType: 'IMAGE',
-        meta: JSON.stringify({ filename: res.data.filename, size: res.data.size })
-      })
-      await nextTick()
-      scrollToBottom()
+      pendingImages.value.push(res.data.url)
     }
   } catch (_e) {
     ElMessage.error('图片上传失败')
@@ -231,12 +286,63 @@ function setReplyingTo(msg: any) {
   replyingTo.value = msg
 }
 
-function scrollToBottom() {
-  nextTick(() => {
-    if (messageListRef.value) {
-      messageListRef.value.scrollTop = messageListRef.value.scrollHeight
+function removePendingImage(idx: number) {
+  pendingImages.value.splice(idx, 1)
+}
+
+// 将每行文本单独渲染，返回 HTML 数组
+function getRenderedLines(): string {
+  if (!inputText.value) return ''
+  const lines = inputText.value.split('\n')
+  return lines.map(line => {
+    if (!line.trim()) return '<div class="md-line empty-line"></div>'
+    try {
+      const html = marked.parse(line) as string
+      return `<div class="md-line">${html}</div>`
+    } catch {
+      return `<div class="md-line">${escapeHtml(line)}</div>`
     }
-  })
+  }).join('')
+}
+
+function escapeHtml(text: string): string {
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+function onEditorBlur() {
+  isEditing.value = false
+}
+
+function startEditing() {
+  if (!isEditing.value) {
+    isEditing.value = true
+    nextTick(() => {
+      textareaRef.value?.focus()
+    })
+  }
+}
+
+function onEditorInput() {
+  // 更新 textarea 行数
+  const lineCount = inputText.value.split('\n').length
+  editorRows.value = Math.min(Math.max(lineCount, 1), 8)
+}
+
+function scrollToBottom() {
+  if (messageListRef.value) {
+    isProgrammaticScroll.value = true
+    messageListRef.value.scrollTop = messageListRef.value.scrollHeight
+    // 滚动完成后清除标志，允许正常检测用户滚动
+    setTimeout(() => { isProgrammaticScroll.value = false }, 100)
+  }
+}
+
+function onMessageScroll() {
+  if (!messageListRef.value || isProgrammaticScroll.value) return
+  const el = messageListRef.value
+  const distToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+  // 用户滚动到距离底部超过100px，认为是主动向上滑动
+  userHasScrolledUp.value = distToBottom > 100
 }
 
 defineExpose({ scrollToBottom, setReplyingTo })
@@ -284,14 +390,6 @@ defineExpose({ scrollToBottom, setReplyingTo })
 .input-action-btn:hover { background: var(--surface-3, #F3F4F6); color: var(--text-primary, #111827); }
 .input-action-btn svg { width: 16px; height: 16px; }
 .input-row { display: flex; gap: 8px; align-items: flex-end; }
-.input-box {
-  flex: 1; border: 1px solid var(--border, #E5E7EB); border-radius: 12px; padding: 8px 12px;
-  font-size: 13px; font-family: inherit; color: var(--text-primary, #111827);
-  background: var(--surface-2, #F9FAFB); resize: none; outline: none; line-height: 1.5; max-height: 120px;
-  overflow-y: auto; transition: border-color 0.15s;
-}
-.input-box:focus { border-color: var(--primary, #4F46E5); background: white; }
-.input-box::placeholder { color: var(--text-secondary, #6B7280); }
 .send-btn {
   height: 36px; padding: 0 16px; background: var(--primary, #4F46E5); color: white; border: none;
   border-radius: 10px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
@@ -321,4 +419,63 @@ defineExpose({ scrollToBottom, setReplyingTo })
 .reply-close:hover { color: var(--text-primary, #111827); }
 .at-all-btn { color: var(--primary, #4F46E5) !important; }
 .at-all-btn:hover { background: #EEF2FF !important; }
+.pending-images { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+.pending-img-wrap { position: relative; }
+.pending-img { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border, #E5E7EB); }
+.pending-img-remove {
+  position: absolute; top: -6px; right: -6px; width: 18px; height: 18px;
+  background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%;
+  font-size: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; line-height: 1;
+}
+.pending-img-remove:hover { background: rgba(239,68,68,0.8); }
+.input-action-btn.md-active { color: var(--primary, #4F46E5) !important; background: #EEF2FF !important; }
+
+/* Obsidian 风格 Markdown 编辑器 */
+.md-editor-wrap {
+  flex: 1; border: 1px solid var(--border, #E5E7EB);
+  border-radius: 12px; background: var(--surface-2, #F9FAFB); min-height: 40px;
+  max-height: 200px; overflow-y: auto; transition: border-color 0.15s;
+}
+.md-editor-wrap:focus-within { border-color: var(--primary, #4F46E5); background: white; }
+
+/* 渲染层：未聚焦时显示预览 */
+.md-render-layer {
+  padding: 8px 12px; font-size: 13px; line-height: 24px;
+  color: var(--text-secondary, #6B7280); white-space: pre-wrap; word-break: break-word;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  min-height: 40px; box-sizing: border-box;
+}
+.md-placeholder {
+  padding: 8px 12px; font-size: 13px; line-height: 24px;
+  color: var(--text-secondary, #6B7280); font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+.md-render-layer :deep(.md-line) { line-height: 24px; }
+.md-render-layer :deep(.md-line.empty-line) { height: 24px; }
+.md-render-layer :deep(h1) { font-size: 18px; font-weight: 600; margin: 0; color: var(--text-primary, #111827); }
+.md-render-layer :deep(h2) { font-size: 16px; font-weight: 600; margin: 0; color: var(--text-primary, #111827); }
+.md-render-layer :deep(h3) { font-size: 14px; font-weight: 600; margin: 0; }
+.md-render-layer :deep(code) { background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-size: 12px; font-family: monospace; }
+.md-render-layer :deep(pre) { background: rgba(0,0,0,0.08); padding: 8px; border-radius: 6px; overflow-x: auto; margin: 4px 0; }
+.md-render-layer :deep(pre code) { background: none; padding: 0; }
+.md-render-layer :deep(p) { margin: 0 0 4px 0; }
+.md-render-layer :deep(p:last-child) { margin-bottom: 0; }
+.md-render-layer :deep(strong) { font-weight: 600; color: var(--text-primary, #111827); }
+.md-render-layer :deep(em) { font-style: italic; }
+.md-render-layer :deep(a) { color: var(--primary, #4F46E5); text-decoration: underline; }
+.md-render-layer :deep(ul), .md-render-layer :deep(ol) { margin: 0 0 4px 0; padding-left: 20px; }
+.md-render-layer :deep(blockquote) { margin: 0; padding-left: 8px; color: var(--text-secondary); border-left: 2px solid var(--primary); }
+
+/* 编辑层 textarea */
+.md-editor {
+  width: 100%; min-height: 40px; padding: 8px 12px; font-size: 13px;
+  font-family: 'PingFang SC', 'Microsoft YaHei', monospace; line-height: 24px;
+  color: var(--text-primary, #111827); background: transparent; border: none; outline: none; resize: none;
+  overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+  box-sizing: border-box;
+}
+.md-editor::placeholder {
+  color: var(--text-secondary, #6B7280) !important;
+}
+
+
 </style>

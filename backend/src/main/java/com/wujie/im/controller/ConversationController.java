@@ -50,13 +50,38 @@ public class ConversationController {
         ));
     }
 
+    @PostMapping("/group")
+    public Result<Conversation> createGroupConversation(@RequestBody Map<String, Long> params) {
+        Conversation conv = conversationService.getOrCreateGroupConversation(
+                params.get("userId"), params.get("groupId")
+        );
+        GroupInfo group = groupInfoMapper.selectById(conv.getTypeId());
+        conv.setGroupInfo(group);
+        return Result.success(conv);
+    }
+
     @GetMapping("/{id}/messages")
     public Result<List<Message>> getMessages(
             @PathVariable Long id,
             @RequestParam(required = false) Long beforeId,
             @RequestParam(defaultValue = "50") int limit) {
-        List<Message> messages = messageService.getMessages(id, beforeId, limit);
-        messages.forEach(m -> m.setContent(null)); // 内容已在列表显示，省略
+        Conversation conv = conversationService.getConversationById(id);
+        List<Message> messages;
+        if (conv != null && "SINGLE".equals(conv.getType())) {
+            // 单聊：双方共享 typeId 指向对方的会话，消息分布在各自的 conversationId 下
+            Long otherUserId = conv.getTypeId();
+            Conversation otherConv = conversationService.getConversationByTypeId(otherUserId);
+            if (otherConv != null) {
+                messages = messageService.getMessagesBetweenUsers(id, otherConv.getId(), beforeId, limit);
+            } else {
+                messages = messageService.getMessages(id, beforeId, limit);
+            }
+        } else if (conv != null && "GROUP".equals(conv.getType())) {
+            // 群聊：查询所有群成员会话中的消息
+            messages = messageService.getGroupMessages(conv.getTypeId(), beforeId, limit);
+        } else {
+            messages = messageService.getMessages(id, beforeId, limit);
+        }
         return Result.success(messages);
     }
 }

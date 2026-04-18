@@ -2,6 +2,7 @@ package com.wujie.im.common;
 
 import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -11,6 +12,7 @@ import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 
+@Slf4j
 @Component
 public class JwtUtil {
     @Value("${jwt.secret}")
@@ -23,6 +25,11 @@ public class JwtUtil {
     private long refreshTokenValidity;
 
     private SecretKey getSigningKey() {
+        if (secret == null || secret.isBlank()) {
+            log.error("JWT secret is null or blank!");
+            throw new IllegalStateException("JWT secret is not configured");
+        }
+        log.debug("JWT secret length: {}", secret.length());
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -48,11 +55,22 @@ public class JwtUtil {
     }
 
     public Claims parseToken(String token) {
-        return Jwts.parser()
-                .verifyWith(getSigningKey())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload();
+        try {
+            Claims claims = Jwts.parser()
+                    .verifyWith(getSigningKey())
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            log.debug("JWT parseToken success: userId={}, username={}, iat={}, exp={}",
+                    claims.get("userId"), claims.getSubject(), claims.getIssuedAt(), claims.getExpiration());
+            return claims;
+        } catch (ExpiredJwtException e) {
+            log.warn("JWT token expired: iat={}, exp={}", e.getClaims().getIssuedAt(), e.getClaims().getExpiration());
+            throw e;
+        } catch (SignatureException e) {
+            log.warn("JWT signature invalid - secret length={}, token prefix={}", secret != null ? secret.length() : "null", token.substring(0, Math.min(50, token.length())));
+            throw e;
+        }
     }
 
     public boolean validateToken(String token) {
@@ -60,6 +78,10 @@ public class JwtUtil {
             parseToken(token);
             return true;
         } catch (JwtException e) {
+            log.warn("JWT validateToken failed: {} - {}", e.getClass().getSimpleName(), e.getMessage());
+            return false;
+        } catch (Exception e) {
+            log.error("JWT validateToken unexpected error: {} - {}", e.getClass().getName(), e.getMessage());
             return false;
         }
     }

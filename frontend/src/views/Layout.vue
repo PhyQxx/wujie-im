@@ -93,6 +93,7 @@
 import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import wsClient from '@/utils/websocket'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -106,6 +107,11 @@ onMounted(async () => {
   if (localStorage.getItem('isAdmin') === null && userStore.currentUser) {
     const isAdmin = (userStore.currentUser.role === 'ADMIN')
     localStorage.setItem('isAdmin', isAdmin ? 'true' : 'false')
+  }
+  // 建立 WebSocket 连接
+  const token = localStorage.getItem('accessToken')
+  if (token) {
+    wsClient.connect(token)
   }
 })
 

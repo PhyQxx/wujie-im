@@ -20,6 +20,7 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   function setCurrentConversation(conv: Conversation) {
+    console.log('[setCurrentConversation] conv.id=' + conv.id)
     currentConversation.value = conv
     // clear unread
     const idx = conversations.value.findIndex(c => c.id === conv.id)
@@ -28,7 +29,12 @@ export const useConversationStore = defineStore('conversation', () => {
 
   async function createConversation(type: 'SINGLE' | 'GROUP', typeId: number) {
     const userId = localStorage.getItem('userId')
-    const res = await request.post('/conversation/single', { userId, otherUserId: typeId })
+    let res
+    if (type === 'SINGLE') {
+      res = await request.post('/conversation/single', { userId, otherUserId: typeId })
+    } else {
+      res = await request.post('/conversation/group', { userId, groupId: typeId })
+    }
     conversations.value.unshift(res.data)
     return res.data
   }

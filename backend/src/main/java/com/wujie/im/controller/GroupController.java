@@ -35,7 +35,13 @@ public class GroupController {
 
     @GetMapping("/list/{userId}")
     public Result<List<GroupInfo>> getUserGroups(@PathVariable Long userId) {
-        return Result.success(groupService.getUserGroups(userId));
+        List<GroupInfo> groups = groupService.getUserGroups(userId);
+        for (GroupInfo g : groups) {
+            User owner = userMapper.selectById(g.getOwnerId());
+            if (owner != null) g.setOwnerName(owner.getUsername());
+            g.setMemberCount(groupService.getGroupMemberIds(g.getId()).size());
+        }
+        return Result.success(groups);
     }
 
     @GetMapping("/{groupId}")

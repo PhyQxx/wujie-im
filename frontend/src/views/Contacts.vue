@@ -13,6 +13,7 @@
             <el-dropdown-menu>
               <el-dropdown-item command="friend">添加好友</el-dropdown-item>
               <el-dropdown-item command="group">创建群组</el-dropdown-item>
+              <el-dropdown-item command="join">加入群组</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -180,7 +181,7 @@
           </div>
           <div class="detail-info">
             <h2>{{ selectedGroup.name }}</h2>
-            <p>{{ selectedGroup.memberCount || 0 }} 位成员</p>
+            <p>{{ groupMembers.length }} 位成员</p>
           </div>
           <div class="detail-actions">
             <button class="btn-sm btn-primary-sm" @click="enterGroupChat">
@@ -190,9 +191,12 @@
           </div>
         </div>
         <div class="detail-tabs">
-          <button class="detail-tab active">群信息</button>
+          <button class="detail-tab" :class="{ active: groupDetailTab === 'info' }" @click="switchGroupTab('info')">群信息</button>
+          <button class="detail-tab" :class="{ active: groupDetailTab === 'manage' }" @click="switchGroupTab('manage')">成员管理</button>
         </div>
-        <div class="detail-content">
+
+        <!-- 群信息 -->
+        <div v-if="groupDetailTab === 'info'" class="detail-content">
           <div class="info-section">
             <h4>群组信息</h4>
             <div class="info-card">
@@ -202,11 +206,38 @@
               </div>
               <div class="info-row">
                 <span class="info-label">群主</span>
-                <span class="info-value">用户{{ selectedGroup.ownerId }}</span>
+                <span class="info-value">{{ selectedGroup.ownerName || '用户' + selectedGroup.ownerId }}</span>
               </div>
               <div class="info-row">
                 <span class="info-label">类型</span>
                 <span class="info-value">{{ selectedGroup.type === 'PRIVATE' ? '私密群' : '公开群' }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 成员管理 -->
+        <div v-else-if="groupDetailTab === 'manage'" class="detail-content">
+          <div v-if="groupCanManage" class="invite-section">
+            <el-input v-model="inviteUsername" placeholder="输入用户名添加成员" @keydown.enter="handleGroupInvite" style="margin-bottom:8px" />
+            <el-button type="primary" size="small" @click="handleGroupInvite">添加</el-button>
+          </div>
+          <div class="member-manage-list">
+            <div v-for="m in groupMembers" :key="m.userId" class="member-manage-item">
+              <div class="contact-avatar small" :style="{ background: getAvatarBg(m.user), color: getAvatarColor(m.user) }">
+                {{ m.user?.username?.[0] || '?' }}
+              </div>
+              <div class="member-info">
+                <div class="member-name">
+                  {{ m.user?.username }}
+                  <el-tag v-if="m.role === 'OWNER'" type="danger" size="small">群主</el-tag>
+                  <el-tag v-else-if="m.role === 'ADMIN'" type="warning" size="small">管理员</el-tag>
+                </div>
+              </div>
+              <div v-if="groupCanManage && m.role !== 'OWNER'" class="member-actions">
+                <el-button v-if="m.role !== 'ADMIN'" size="small" type="warning" @click="handleGroupSetAdmin(m, true)">设管理</el-button>
+                <el-button v-else size="small" @click="handleGroupSetAdmin(m, false)">取消管理</el-button>
+                <el-button size="small" type="danger" @click="handleGroupRemoveMember(m)">移除</el-button>
               </div>
             </div>
           </div>
@@ -250,6 +281,19 @@
         <el-button type="primary" @click="createGroup">创建</el-button>
       </template>
     </el-dialog>
+
+    <!-- 加入群组弹窗 -->
+    <el-dialog v-model="showJoinGroupDialog" title="加入群组" width="400px">
+      <el-form :model="{}" label-width="80px">
+        <el-form-item label="群号">
+          <el-input v-model="joinGroupId" placeholder="请输入群号" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showJoinGroupDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleJoinGroup">加入</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -272,14 +316,24 @@ const userStore = useUserStore()
 
 const tab = ref('friends')
 const detailTab = ref('profile')
+const groupDetailTab = ref('info')
 const search = ref('')
 const showAddDialog = ref(false)
 const showCreateGroupDialog = ref(false)
+const showJoinGroupDialog = ref(false)
 const searchUser = ref('')
+const joinGroupId = ref('')
 const searchResults = ref<User[]>([])
 const selectedFriend = ref<User | null>(null)
 const selectedGroup = ref<Group | null>(null)
 const groupForm = ref({ name: '', type: 'PUBLIC' })
+const inviteUsername = ref('')
+const currentUserId = computed(() => Number(localStorage.getItem('userId')))
+const groupMembers = computed(() => groupStore.members)
+const groupCanManage = computed(() => {
+  const m = groupMembers.value.find((gm: any) => gm.userId === currentUserId.value)
+  return m && (m.role === 'OWNER' || m.role === 'ADMIN')
+})
 
 onMounted(async () => {
   await friendStore.fetchFriends()
@@ -321,6 +375,48 @@ function selectFriend(friend: User) {
 function selectGroup(group: Group) {
   selectedGroup.value = group
   selectedFriend.value = null
+  groupDetailTab.value = 'info'
+  inviteUsername.value = ''
+  groupStore.fetchMembers(group.id)
+}
+
+function switchGroupTab(t: string) {
+  groupDetailTab.value = t
+}
+
+async function handleGroupInvite() {
+  if (!inviteUsername.value.trim() || !selectedGroup.value) return
+  try {
+    const users = await friendStore.searchUsers(inviteUsername.value.trim(), currentUserId.value)
+    const user = (users || []).find((u: any) => u.username === inviteUsername.value.trim())
+    if (!user) { ElMessage.error('用户不存在'); return }
+    await groupStore.inviteMembers(selectedGroup.value.id, [user.id])
+    ElMessage.success('添加成功')
+    inviteUsername.value = ''
+    await groupStore.fetchMembers(selectedGroup.value.id)
+  } catch (e: any) {
+    ElMessage.error(e?.message || '添加失败')
+  }
+}
+
+async function handleGroupSetAdmin(m: any, isAdmin: boolean) {
+  if (!selectedGroup.value) return
+  try {
+    await groupStore.setAdmin(selectedGroup.value.id, m.userId, isAdmin)
+    ElMessage.success(isAdmin ? '已设为管理员' : '已取消管理员')
+  } catch (e: any) {
+    ElMessage.error(e?.message || '操作失败')
+  }
+}
+
+async function handleGroupRemoveMember(m: any) {
+  if (!selectedGroup.value) return
+  try {
+    await groupStore.removeMember(selectedGroup.value.id, m.userId)
+    ElMessage.success('已移除')
+  } catch (e: any) {
+    ElMessage.error(e?.message || '移除失败')
+  }
 }
 
 function getAvatarBg(user: any) {
@@ -346,13 +442,14 @@ function formatDate(date?: string) {
   return new Date(date).toLocaleDateString()
 }
 
-async function onSearch() {
-  // 本地过滤
+function onSearch() {
+  // 本地过滤（filteredFriends computed 会自动响应 search.value 的变化）
 }
 
 function handleAddCommand(command: string) {
   if (command === 'friend') showAddDialog.value = true
   else if (command === 'group') showCreateGroupDialog.value = true
+  else if (command === 'join') showJoinGroupDialog.value = true
 }
 
 async function handleRequest(id: number, action: 'agree' | 'reject') {
@@ -362,13 +459,16 @@ async function handleRequest(id: number, action: 'agree' | 'reject') {
 
 async function startChat() {
   if (!selectedFriend.value) return
-  await conversationStore.createConversation('SINGLE', selectedFriend.value.id)
+  const conv = await conversationStore.createConversation('SINGLE', selectedFriend.value.id)
+  conversationStore.setCurrentConversation(conv)
   router.push('/conversation')
 }
 
 async function enterGroupChat() {
   if (!selectedGroup.value) return
-  await conversationStore.createConversation('GROUP', selectedGroup.value.id)
+  const conv = await conversationStore.createConversation('GROUP', selectedGroup.value.id)
+  console.log('[enterGroupChat] conv.id=' + conv.id + ' groupId=' + selectedGroup.value.id)
+  conversationStore.setCurrentConversation(conv)
   router.push('/conversation')
 }
 
@@ -377,8 +477,8 @@ async function doSearchUser() {
   if (!searchUser.value.trim()) { searchResults.value = []; return }
   searchTimer = setTimeout(async () => {
     const currentUserId = Number(localStorage.getItem('userId'))
-    const results = await friendStore.searchUsers(searchUser.value)
-    searchResults.value = (results || []).filter((u: User) => u.id !== currentUserId)
+    const results = await friendStore.searchUsers(searchUser.value, currentUserId)
+    searchResults.value = results || []
   }, 300)
 }
 
@@ -401,6 +501,23 @@ async function createGroup() {
   showCreateGroupDialog.value = false
   groupForm.value = { name: '', type: 'PUBLIC' }
   await groupStore.fetchGroups()
+}
+
+async function handleJoinGroup() {
+  const id = Number(joinGroupId.value)
+  if (!id) {
+    ElMessage.warning('请输入群号')
+    return
+  }
+  try {
+    await groupApi.join(id, Number(localStorage.getItem('userId')))
+    ElMessage.success('加入成功')
+    showJoinGroupDialog.value = false
+    joinGroupId.value = ''
+    await groupStore.fetchGroups()
+  } catch (e: any) {
+    ElMessage.error(e?.message || '加入失败')
+  }
 }
 </script>
 
@@ -698,4 +815,30 @@ async function createGroup() {
 .search-results { margin-top: 12px; display: flex; flex-direction: column; gap: 8px; }
 .search-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
 .s-name { flex: 1; font-size: 13px; }
+
+/* 成员管理 */
+.invite-section { display: flex; gap: 8px; align-items: center; margin-bottom: 16px; }
+.member-manage-list { display: flex; flex-direction: column; gap: 8px; }
+.member-manage-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg-secondary, #F9FAFB);
+  border-radius: 8px;
+}
+.member-manage-item .contact-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.member-manage-item .member-info { flex: 1; }
+.member-manage-item .member-name { font-size: 13px; font-weight: 500; display: flex; align-items: center; gap: 4px; }
+.member-actions { display: flex; gap: 4px; flex-shrink: 0; }
 </style>

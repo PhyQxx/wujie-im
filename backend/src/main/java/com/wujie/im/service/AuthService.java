@@ -92,4 +92,12 @@ public class AuthService {
         result.put("refreshToken", newRefreshToken);
         return result;
     }
+
+    public boolean validateToken(String token) {
+        return jwtUtil.validateToken(token);
+    }
+
+    public Long getUserIdFromToken(String token) {
+        return jwtUtil.getUserId(token);
+    }
 }

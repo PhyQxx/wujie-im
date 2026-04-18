@@ -13,11 +13,13 @@
     "crypto-js": "^4.2.0",
     "dayjs": "^1.11.10",
     "element-plus": "^2.5.0",
+    "marked": "^15.0.12",
     "pinia": "^2.1.7",
     "vue": "^3.4.0",
     "vue-router": "^4.2.5"
   },
   "devDependencies": {
+    "@types/marked": "^5.0.2",
     "@types/node": "^25.6.0",
     "@vitejs/plugin-vue": "^5.0.0",
     "typescript": "^5.3.3",

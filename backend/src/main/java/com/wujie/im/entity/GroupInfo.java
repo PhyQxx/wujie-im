@@ -21,4 +21,8 @@ public class GroupInfo {
     private LocalDateTime updateTime;
     @TableLogic
     private Integer deleted;
+    @TableField(exist = false)
+    private String ownerName;
+    @TableField(exist = false)
+    private Integer memberCount;
 }

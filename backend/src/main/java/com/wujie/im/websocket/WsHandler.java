@@ -40,8 +40,10 @@ public class WsHandler implements WebSocketHandler {
     @Override
     public void handleMessage(WebSocketSession session, WebSocketMessage<?> message) throws Exception {
         String payload = message.getPayload().toString();
+        log.info("WS收到原始消息 sessionId={}: {}", session.getId(), payload);
         JSONObject json = JSONUtil.parseObj(payload);
         String type = json.getStr("type");
+        log.info("WS消息类型: {}, sessionId={}, onlineUsers={}", type, session.getId(), onlineUsers.keySet());
 
         switch (type) {
             case "auth":
@@ -65,18 +67,44 @@ public class WsHandler implements WebSocketHandler {
     }
 
     private void handleAuth(WebSocketSession session, JSONObject json) {
+        String payload = json.toString();
         String token = json.getStr("token");
-        try {
-            Long userId = jwtUtil.getUserId(token);
-            onlineUsers.put(userId, session);
-            session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":200,\"msg\":\"认证成功\"}}"));
-            log.info("用户认证成功: userId={}", userId);
-        } catch (Exception e) {
+        log.info("WebSocket原始消息: {}", payload);
+        log.info("WebSocket提取的token: {}", token);
+        if (token == null || token.isBlank()) {
+            log.error("WebSocket认证失败: token为空或null");
             try {
-                session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":401,\"msg\":\"认证失败\"}}"));
-            } catch (IOException ex) {
-                throw new RuntimeException(ex);
+                session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":401,\"msg\":\"token为空\"}}"));
+            } catch (IOException ex) { throw new RuntimeException(ex); }
+            return;
+        }
+        log.info("WebSocket认证 token长度={}", token.length());
+        try {
+            if (!jwtUtil.validateToken(token)) {
+                // 尝试解析token以获取更多错误信息
+                try {
+                    jwtUtil.parseToken(token);
+                    log.error("WebSocket认证失败: token验证失败 (parse成功但validate失败)");
+                } catch (Exception e) {
+                    log.error("WebSocket认证失败: token验证失败, parse异常: {} - {}", e.getClass().getName(), e.getMessage());
+                }
+                session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":401,\"msg\":\"token无效\"}}"));
+                return;
             }
+            Long userId = jwtUtil.getUserId(token);
+            log.info("WebSocket认证成功: userId={}, userIdType={}, sessionId={}, onlineUsers.size={}, onlineUsers={}", userId, userId != null ? userId.getClass().getName() : "null", session.getId(), onlineUsers.size(), onlineUsers.keySet());
+            onlineUsers.put(userId, session);
+            log.info("WebSocket认证后 onlineUsers: {}", onlineUsers.keySet());
+            session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":200,\"msg\":\"认证成功\"}}"));
+        } catch (io.jsonwebtoken.security.SignatureException e) {
+            log.error("WebSocket认证失败: 签名错误 - {}", e.getMessage());
+            try { session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":401,\"msg\":\"签名错误\"}}")); } catch (IOException ex) { throw new RuntimeException(ex); }
+        } catch (io.jsonwebtoken.ExpiredJwtException e) {
+            log.error("WebSocket认证失败: token已过期 - {}", e.getMessage());
+            try { session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":401,\"msg\":\"token已过期\"}}")); } catch (IOException ex) { throw new RuntimeException(ex); }
+        } catch (Exception e) {
+            log.error("WebSocket认证失败: error={}, type={}", e.getMessage(), e.getClass().getName(), e);
+            try { session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":401,\"msg\":\"认证失败: " + e.getMessage() + "\"}}")); } catch (IOException ex) { throw new RuntimeException(ex); }
         }
     }
 
@@ -87,39 +115,11 @@ public class WsHandler implements WebSocketHandler {
         String contentType = json.getStr("contentType", "TEXT");
         String metaStr = json.getStr("meta");
 
-        // 保存消息（meta中可能包含atAll字段）
+        log.info("handleSendMessage: senderId={}, conversationId={}, content={}", senderId, conversationId, content);
+
+        // 保存消息（meta中可能包含atAll字段），推送由MessageService内部处理
         Message msg = messageService.sendMessage(senderId, conversationId, content, contentType, metaStr);
-
-        // 获取会话信息，确定接收者
-        Conversation conv = conversationService.getConversationById(conversationId);
-        if (conv != null) {
-            if ("SINGLE".equals(conv.getType())) {
-                // 单聊：发给对方
-                Long receiverId = conv.getTypeId();
-                conversationService.updateLastMessage(conversationId, msg.getId(), content);
-                sendToUser(receiverId, JSONUtil.toJsonStr(
-                        Map.of("type", "message", "data", msg)
-                ));
-            } else if ("GROUP".equals(conv.getType())) {
-                // 群聊：广播给所有群成员
-                List<Long> memberIds = groupService.getGroupMemberIds(conv.getTypeId());
-                // 检查是否@全体
-                boolean atAll = msg.getMeta() != null && msg.getMeta().contains("atAll");
-                for (Long memberId : memberIds) {
-                    if (!memberId.equals(senderId) || atAll) {
-                        sendToUser(memberId, JSONUtil.toJsonStr(
-                                Map.of("type", "message", "data", msg)
-                        ));
-                    }
-                }
-                conversationService.updateLastMessage(conversationId, msg.getId(), content);
-            }
-        }
-
-        // 确认消息发给发送者（状态更新为已发送）
-        sendToUser(senderId, JSONUtil.toJsonStr(
-                Map.of("type", "message", "data", msg)
-        ));
+        log.info("handleSendMessage: saved msgId={}, senderId={}, conversationId={}", msg.getId(), msg.getSenderId(), msg.getConversationId());
     }
 
     private void handleReadMessage(JSONObject json) {
@@ -143,8 +143,9 @@ public class WsHandler implements WebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus closeStatus) throws Exception {
-        log.info("WebSocket连接关闭: sessionId={}, status={}", session.getId(), closeStatus);
+        log.info("WebSocket连接关闭: sessionId={}, status={}, onlineUsers.size={}", session.getId(), closeStatus, onlineUsers.size());
         onlineUsers.entrySet().removeIf(entry -> entry.getValue().equals(session));
+        log.info("WebSocket连接关闭后 onlineUsers: {}", onlineUsers);
     }
 
     @Override
@@ -154,12 +155,16 @@ public class WsHandler implements WebSocketHandler {
 
     public void sendToUser(Long userId, String message) {
         WebSocketSession session = onlineUsers.get(userId);
+        log.info("sendToUser: userId={}, session={}, isOpen={}", userId, session != null, session != null && session.isOpen());
         if (session != null && session.isOpen()) {
             try {
                 session.sendMessage(new TextMessage(message));
+                log.info("sendToUser: SUCCESS sent to userId={}", userId);
             } catch (IOException e) {
                 log.error("发送WebSocket消息失败: userId={}", userId, e);
             }
+        } else {
+            log.warn("sendToUser: user not online or session null, userId={}", userId);
         }
     }
 

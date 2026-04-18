@@ -7,43 +7,49 @@ class WsClient {
   private handlers: Map<string, Function[]> = new Map()
   private reconnectTimer: number | null = null
   private heartbeatTimer: number | null = null
+  private manualClose = false
 
   constructor(url: string) {
     this.url = url
   }
 
   connect(token: string) {
-    return new Promise<void>((resolve, _reject) => {
-      this.ws = new WebSocket(this.url)
+    if (this.ws?.readyState === WebSocket.OPEN || this.ws?.readyState === WebSocket.CONNECTING) return
+    this.manualClose = false
+    this.stopHeartbeat()
+    this.ws?.close()
+    this.ws = new WebSocket(this.url)
 
-      this.ws.onopen = () => {
-        this.send({ type: 'auth', token })
-        this.startHeartbeat()
-        resolve()
-      }
+    this.ws.onopen = () => {
+      console.log('[WS] 连接建立，发送auth消息')
+      // 使用 refreshToken 认证（有效期7天），避免 accessToken（15分钟）过期导致 WS 掉线
+      const refreshToken = localStorage.getItem('refreshToken')
+      this.send({ type: 'auth', token: refreshToken })
+      this.startHeartbeat()
+    }
 
-      this.ws.onmessage = (event) => {
-        try {
-          const msg: WsMessage = JSON.parse(event.data)
-          const handlers = this.handlers.get(msg.type)
-          if (handlers) {
-            handlers.forEach(h => h(msg.data))
-          }
-        } catch (e) {
-          console.error('WsMessage parse error', e)
+    this.ws.onmessage = (event) => {
+      try {
+        const msg: WsMessage = JSON.parse(event.data)
+        const handlers = this.handlers.get(msg.type)
+        if (handlers) {
+          handlers.forEach(h => h(msg.data))
         }
+      } catch (e) {
+        console.error('WsMessage parse error', e)
       }
+    }
 
-      this.ws.onerror = (error) => {
-        console.error('WebSocket error', error)
-        ElMessage.error('WebSocket连接错误')
-      }
+    this.ws.onerror = (error) => {
+      console.error('WebSocket error', error)
+    }
 
-      this.ws.onclose = () => {
-        this.stopHeartbeat()
+    this.ws.onclose = () => {
+      this.stopHeartbeat()
+      if (!this.manualClose) {
         this.scheduleReconnect()
       }
-    })
+    }
   }
 
   send(data: any) {
@@ -88,16 +94,18 @@ class WsClient {
         this.connect(token)
       }
       this.reconnectTimer = null
-    }, 5000)
+    }, 3000)
   }
 
   close() {
+    this.manualClose = true
     this.stopHeartbeat()
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer)
       this.reconnectTimer = null
     }
     this.ws?.close()
+    this.ws = null
   }
 }
 

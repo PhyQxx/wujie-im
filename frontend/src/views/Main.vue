@@ -45,6 +45,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { useConversationStore } from '@/stores/conversation'
 import { useGroupStore } from '@/stores/group'
 import { useNotificationStore } from '@/stores/notification'
+import { useMessageStore } from '@/stores/message'
 import { ElMessage } from 'element-plus'
 import ConversationList from '@/components/ConversationList.vue'
 import ChatPanel from '@/components/ChatPanel.vue'
@@ -54,6 +55,7 @@ import type { Conversation } from '@/types'
 const conversationStore = useConversationStore()
 const groupStore = useGroupStore()
 const notificationStore = useNotificationStore()
+const messageStore = useMessageStore()
 
 const chatPanelRef = ref()
 const searchKeyword = ref('')
@@ -70,16 +72,12 @@ const tabs = [
 onMounted(async () => {
   await notificationStore.fetchNotifications()
   await conversationStore.fetchConversations()
+  messageStore.initWsListener()
   wsClient.on('message', (msg: any) => {
     if (msg && msg.conversationId) {
       conversationStore.updateLastMessage(msg.conversationId, msg.content, msg.createTime)
     }
   })
-})
-
-onUnmounted(() => {
-  wsClient.off('message', () => {})
-  wsClient.close()
 })
 
 async function selectConversation(conv: Conversation) {

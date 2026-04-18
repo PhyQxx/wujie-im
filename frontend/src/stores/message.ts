@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, nextTick } from 'vue'
 import type { Message } from '@/types'
 import request from '@/utils/request'
 import wsClient from '@/utils/websocket'
+import { useConversationStore } from './conversation'
 
 export const useMessageStore = defineStore('message', () => {
   const messages = ref<Message[]>([])
@@ -12,15 +13,33 @@ export const useMessageStore = defineStore('message', () => {
   function initWsListener() {
     wsClient.on('message', (msg: any) => {
       if (msg && msg.conversationId) {
-        // 避免重复：检查是否已存在
+        const currentUserId = Number(localStorage.getItem('userId'))
+        if (msg.senderId === currentUserId) return
+        const conversationStore = useConversationStore()
+        const currentConvId = conversationStore.currentConversation?.id
+        const isCurrentConv = currentConvId && msg.conversationId === currentConvId
         const exists = messages.value.some(m => m.id === msg.id)
         if (!exists) {
+          console.log('[WS message] added msg.id=' + msg.id + ' convId=' + msg.conversationId + ' curConvId=' + currentConvId)
           messages.value.push(msg)
+          if (isCurrentConv) {
+            // 当前会话消息，滚动到底部
+            nextTick(() => {
+              const el = document.querySelector('.messages')
+              if (el) el.scrollTop = el.scrollHeight
+            })
+          } else {
+            // 非当前会话消息，更新会话列表的未读数
+            const conv = conversationStore.conversations.find(c => c.id === msg.conversationId)
+            if (conv) {
+              conv.unreadCount = (conv.unreadCount || 0) + 1
+            }
+            conversationStore.updateLastMessage(msg.conversationId, msg.content, msg.createTime)
+          }
         }
       }
     })
     wsClient.on('message_read', (data: any) => {
-      // 已读回执：更新所有相关消息状态为"已读"
       messages.value.forEach(m => {
         if (m.senderId !== data.readBy && m.id <= data.messageId) {
           m.status = 'READ'
@@ -43,9 +62,11 @@ export const useMessageStore = defineStore('message', () => {
         params: beforeId ? { beforeId } : {}
       })
       const newMessages: Message[] = res.data || []
+      console.log('[fetchMessages] convId=' + conversationId + ' count=' + newMessages.length + ' beforeId=' + beforeId)
       if (beforeId) {
-        messages.value.push(...newMessages)
+        messages.value.unshift(...newMessages)
       } else {
+        console.log('[fetchMessages] SET messages to ' + newMessages.length)
         messages.value = newMessages
       }
     } finally {
@@ -89,11 +110,6 @@ export const useMessageStore = defineStore('message', () => {
     await request.put('/message/read', { userId: Number(localStorage.getItem('userId')), conversationId, messageId })
   }
 
-  function appendMessage(msg: Message) {
-    const exists = messages.value.some(m => m.id === msg.id)
-    if (!exists) messages.value.push(msg)
-  }
-
   function clear() {
     messages.value = []
     lastReadId.value = 0
@@ -101,6 +117,6 @@ export const useMessageStore = defineStore('message', () => {
 
   return {
     messages, loading, lastReadId,
-    initWsListener, fetchMessages, sendMessage, recallMessage, markAsRead, appendMessage, clear
+    initWsListener, fetchMessages, sendMessage, recallMessage, markAsRead, clear
   }
 })

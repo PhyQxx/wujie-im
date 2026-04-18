@@ -18,12 +18,15 @@ public class UserService {
     @Autowired
     private UserProfileMapper userProfileMapper;
 
-    public List<User> listUsers(String keyword) {
+    public List<User> listUsers(String keyword, Long excludeId) {
         LambdaQueryWrapper<User> q = new LambdaQueryWrapper<>();
         if (keyword != null && !keyword.isEmpty()) {
             q.like(User::getUsername, keyword)
                     .or().like(User::getPhone, keyword)
                     .or().like(User::getEmail, keyword);
+        }
+        if (excludeId != null) {
+            q.ne(User::getId, excludeId);
         }
         q.eq(User::getStatus, 1);
         List<User> users = userMapper.selectList(q);
