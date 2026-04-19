@@ -1,5 +1,6 @@
 package com.wujie.im.controller;
 
+import com.wujie.im.common.Encrypt;
 import com.wujie.im.common.Result;
 import com.wujie.im.entity.Conversation;
 import com.wujie.im.entity.GroupInfo;
@@ -26,6 +27,7 @@ public class ConversationController {
     @Autowired
     private GroupInfoMapper groupInfoMapper;
 
+    @Encrypt
     @GetMapping("/list/{userId}")
     public Result<List<Conversation>> getConversations(@PathVariable Long userId) {
         List<Conversation> list = conversationService.getConversations(userId);
@@ -43,6 +45,7 @@ public class ConversationController {
         return Result.success(list);
     }
 
+    @Encrypt
     @PostMapping("/single")
     public Result<Conversation> createSingleConversation(@RequestBody Map<String, Long> params) {
         return Result.success(conversationService.getOrCreateSingleConversation(
@@ -50,6 +53,7 @@ public class ConversationController {
         ));
     }
 
+    @Encrypt
     @PostMapping("/group")
     public Result<Conversation> createGroupConversation(@RequestBody Map<String, Long> params) {
         Conversation conv = conversationService.getOrCreateGroupConversation(
@@ -60,6 +64,7 @@ public class ConversationController {
         return Result.success(conv);
     }
 
+    @Encrypt
     @GetMapping("/{id}/messages")
     public Result<List<Message>> getMessages(
             @PathVariable Long id,

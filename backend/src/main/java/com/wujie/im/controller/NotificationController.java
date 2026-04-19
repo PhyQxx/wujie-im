@@ -1,5 +1,6 @@
 package com.wujie.im.controller;
 
+import com.wujie.im.common.Encrypt;
 import com.wujie.im.common.Result;
 import com.wujie.im.entity.Notification;
 import com.wujie.im.service.NotificationService;
@@ -14,22 +15,26 @@ public class NotificationController {
     @Autowired
     private NotificationService notificationService;
 
+    @Encrypt
     @GetMapping("/list/{userId}")
     public Result<List<Notification>> getNotifications(@PathVariable Long userId) {
         return Result.success(notificationService.getNotifications(userId));
     }
 
+    @Encrypt
     @GetMapping("/unread/{userId}")
     public Result<List<Notification>> getUnread(@PathVariable Long userId) {
         return Result.success(notificationService.getUnread(userId));
     }
 
+    @Encrypt
     @PutMapping("/read/{id}")
     public Result<Void> markAsRead(@PathVariable Long id) {
         notificationService.markAsRead(id);
         return Result.success();
     }
 
+    @Encrypt
     @PostMapping("/send")
     public Result<Void> sendNotification(@RequestBody Map<String, Object> params) {
         notificationService.sendNotification(

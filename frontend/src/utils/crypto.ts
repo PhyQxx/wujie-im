@@ -1,14 +1,45 @@
 import CryptoJS from 'crypto-js'
 
-const SECRET_KEY = 'wujie-im-secret-key'
+// 固定密钥（需要与后端一致）
+const SECRET_KEY = 'wujie-im-aes-256-key-2024-change-in-production'
+// 固定 IV（简化版，生产环境应随机生成并传输）
+const IV = '1234567890123456'
 
+/**
+ * AES-CBC 加密
+ */
 export function encrypt(text: string): string {
-  return CryptoJS.AES.encrypt(text, SECRET_KEY).toString()
+  const key = CryptoJS.enc.Utf8.parse(SECRET_KEY.substring(0, 32))
+  const iv = CryptoJS.enc.Utf8.parse(IV)
+
+  const encrypted = CryptoJS.AES.encrypt(text, key, {
+    iv: iv,
+    mode: CryptoJS.mode.CBC,
+    padding: CryptoJS.pad.Pkcs7
+  })
+
+  return encrypted.toString()
 }
 
+/**
+ * AES-CBC 解密
+ */
 export function decrypt(cipherText: string): string {
-  const bytes = CryptoJS.AES.decrypt(cipherText, SECRET_KEY)
-  return bytes.toString(CryptoJS.enc.Utf8)
+  const key = CryptoJS.enc.Utf8.parse(SECRET_KEY.substring(0, 32))
+  const iv = CryptoJS.enc.Utf8.parse(IV)
+
+  const decrypted = CryptoJS.AES.decrypt(cipherText, key, {
+    iv: iv,
+    mode: CryptoJS.mode.CBC,
+    padding: CryptoJS.pad.Pkcs7
+  })
+
+  // 使用 stringify 代替 toString
+  const result = CryptoJS.enc.Utf8.stringify(decrypted)
+  if (!result) {
+    throw new Error('AES解密结果为空')
+  }
+  return result
 }
 
 export function md5(text: string): string {

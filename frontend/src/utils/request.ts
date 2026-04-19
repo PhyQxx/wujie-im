@@ -1,10 +1,19 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
+import { encrypt, decrypt } from './crypto'
 
+// 创建 axios 实例
 const request = axios.create({
   baseURL: '/api',
   timeout: 10000
 })
+
+// 不需要加密的接口
+const NO_ENCRYPT_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/debug-verify', '/upload/image', '/upload/file']
+
+function shouldEncrypt(url: string): boolean {
+  return !NO_ENCRYPT_PATHS.some(path => url.includes(path))
+}
 
 // 请求拦截器：添加JWT
 request.interceptors.request.use(config => {
@@ -15,7 +24,7 @@ request.interceptors.request.use(config => {
   return config
 })
 
-// 响应拦截器
+// 响应拦截器：处理普通响应
 request.interceptors.response.use(
   response => {
     const res = response.data
@@ -37,4 +46,79 @@ request.interceptors.response.use(
   }
 )
 
-export default request
+// 封装的请求方法
+const api = {
+  get: <T = any>(url: string, config?: any) => {
+    if (shouldEncrypt(url)) {
+      return fetchEncrypted('GET', url) as Promise<T>
+    }
+    return request.get<T>(url, config)
+  },
+
+  post: <T = any>(url: string, data?: any, config?: any) => {
+    if (shouldEncrypt(url) && data !== undefined) {
+      // 使用 fetch 发送加密请求
+      return fetchEncrypted('POST', url, data) as Promise<T>
+    }
+    return request.post<T>(url, data, config)
+  },
+
+  put: <T = any>(url: string, data?: any, config?: any) => {
+    if (shouldEncrypt(url) && data !== undefined) {
+      // 使用 fetch 发送加密请求
+      return fetchEncrypted('PUT', url, data) as Promise<T>
+    }
+    return request.put<T>(url, data, config)
+  },
+
+  delete: <T = any>(url: string, config?: any) => request.delete<T>(url, config)
+}
+
+// 使用 fetch 发送加密请求
+async function fetchEncrypted(method: 'GET' | 'POST' | 'PUT', url: string, data?: any): Promise<any> {
+  const token = localStorage.getItem('accessToken')
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json'
+  }
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
+  }
+
+  let body
+  if (method !== 'GET' && data !== undefined) {
+    const requestJson = JSON.stringify(data)
+    body = encrypt(requestJson)
+  }
+
+  const response = await fetch('/api' + url, {
+    method,
+    headers,
+    body
+  })
+
+  const text = await response.text()
+
+  // 解密响应
+  let decryptedJson
+  try {
+    decryptedJson = decrypt(text)
+  } catch {
+    throw new Error('响应解密失败')
+  }
+
+  let res
+  try {
+    res = JSON.parse(decryptedJson)
+  } catch {
+    throw new Error('响应格式错误')
+  }
+
+  if (res.code !== 200) {
+    ElMessage.error(res.msg || '请求失败')
+    throw res
+  }
+  return res
+}
+
+export default api

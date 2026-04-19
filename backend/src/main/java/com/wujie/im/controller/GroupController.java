@@ -1,5 +1,6 @@
 package com.wujie.im.controller;
 
+import com.wujie.im.common.Encrypt;
 import com.wujie.im.common.Result;
 import com.wujie.im.entity.GroupInfo;
 import com.wujie.im.entity.GroupMember;
@@ -23,6 +24,7 @@ public class GroupController {
     @Autowired
     private UserService userService;
 
+    @Encrypt
     @PostMapping("/create")
     public Result<GroupInfo> createGroup(@RequestBody Map<String, Object> params) {
         return Result.success(groupService.createGroup(
@@ -33,6 +35,7 @@ public class GroupController {
         ));
     }
 
+    @Encrypt
     @GetMapping("/list/{userId}")
     public Result<List<GroupInfo>> getUserGroups(@PathVariable Long userId) {
         List<GroupInfo> groups = groupService.getUserGroups(userId);
@@ -44,11 +47,13 @@ public class GroupController {
         return Result.success(groups);
     }
 
+    @Encrypt
     @GetMapping("/{groupId}")
     public Result<GroupInfo> getGroup(@PathVariable Long groupId) {
         return Result.success(groupService.getGroupById(groupId));
     }
 
+    @Encrypt
     @GetMapping("/members/{groupId}")
     public Result<List<Map<String, Object>>> getGroupMembers(@PathVariable Long groupId) {
         List<GroupMember> members = groupService.getGroupMembers(groupId);
@@ -71,6 +76,7 @@ public class GroupController {
         return Result.success(result);
     }
 
+    @Encrypt
     @PostMapping("/join")
     public Result<Void> joinGroup(@RequestBody Map<String, Object> params) {
         groupService.joinGroup(
@@ -81,16 +87,19 @@ public class GroupController {
         return Result.success();
     }
 
+    @Encrypt
     @GetMapping("/join-requests/{groupId}")
     public Result<List<GroupJoinRequest>> getJoinRequests(@PathVariable Long groupId) {
         return Result.success(groupService.getJoinRequests(groupId));
     }
 
+    @Encrypt
     @GetMapping("/my-requests/{userId}")
     public Result<List<GroupJoinRequest>> getUserJoinRequests(@PathVariable Long userId) {
         return Result.success(groupService.getUserJoinRequests(userId));
     }
 
+    @Encrypt
     @PutMapping("/join-request/{requestId}")
     public Result<Void> handleJoinRequest(@PathVariable Long requestId,
                                           @RequestParam Long reviewerId,
@@ -99,6 +108,7 @@ public class GroupController {
         return Result.success();
     }
 
+    @Encrypt
     @PutMapping("/update/{groupId}")
     public Result<Void> updateGroup(@PathVariable Long groupId,
                                     @RequestBody Map<String, Object> params,
@@ -113,6 +123,7 @@ public class GroupController {
         return Result.success();
     }
 
+    @Encrypt
     @PostMapping("/invite/{groupId}")
     public Result<Void> inviteMembers(@PathVariable Long groupId,
                                        @RequestBody Map<String, Object> params,
@@ -124,6 +135,7 @@ public class GroupController {
         return Result.success();
     }
 
+    @Encrypt
     @DeleteMapping("/member/{groupId}/{userId}")
     public Result<Void> removeMember(@PathVariable Long groupId,
                                       @PathVariable Long userId,
@@ -132,12 +144,14 @@ public class GroupController {
         return Result.success();
     }
 
+    @Encrypt
     @PostMapping("/leave/{groupId}")
     public Result<Void> leaveGroup(@PathVariable Long groupId, @RequestParam Long userId) {
         groupService.leaveGroup(groupId, userId);
         return Result.success();
     }
 
+    @Encrypt
     @PutMapping("/mute/{groupId}/{targetUserId}")
     public Result<Void> muteMember(@PathVariable Long groupId,
                                     @PathVariable Long targetUserId,
@@ -147,6 +161,7 @@ public class GroupController {
         return Result.success();
     }
 
+    @Encrypt
     @PutMapping("/unmute/{groupId}/{targetUserId}")
     public Result<Void> unmuteMember(@PathVariable Long groupId,
                                       @PathVariable Long targetUserId,
@@ -155,6 +170,7 @@ public class GroupController {
         return Result.success();
     }
 
+    @Encrypt
     @PutMapping("/admin/{groupId}/{targetUserId}")
     public Result<Void> setAdmin(@PathVariable Long groupId,
                                   @PathVariable Long targetUserId,
@@ -164,6 +180,7 @@ public class GroupController {
         return Result.success();
     }
 
+    @Encrypt
     @DeleteMapping("/{groupId}")
     public Result<Void> dissolveGroup(@PathVariable Long groupId, @RequestParam Long userId) {
         groupService.dissolveGroup(groupId, userId);

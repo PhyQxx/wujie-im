@@ -1,5 +1,6 @@
 package com.wujie.im.controller;
 
+import com.wujie.im.common.Encrypt;
 import com.wujie.im.common.Result;
 import com.wujie.im.entity.Message;
 import com.wujie.im.service.MessageService;
@@ -14,6 +15,7 @@ public class MessageController {
     @Autowired
     private MessageService messageService;
 
+    @Encrypt
     @PostMapping("/send")
     public Result<Message> sendMessage(@RequestBody Map<String, Object> params) {
         String meta = params.get("meta") != null ? (String) params.get("meta") : null;
@@ -28,6 +30,7 @@ public class MessageController {
         ));
     }
 
+    @Encrypt
     @GetMapping("/list/{conversationId}")
     public Result<List<Message>> getMessages(@PathVariable Long conversationId,
                                             @RequestParam(required = false) Long beforeId,
@@ -35,12 +38,14 @@ public class MessageController {
         return Result.success(messageService.getMessages(conversationId, beforeId, limit));
     }
 
+    @Encrypt
     @PutMapping("/read")
     public Result<Void> markAsRead(@RequestBody Map<String, Long> params) {
         messageService.markAsRead(params.get("userId"), params.get("conversationId"), params.get("messageId"));
         return Result.success();
     }
 
+    @Encrypt
     @PutMapping("/recall/{messageId}")
     public Result<Void> recallMessage(@PathVariable Long messageId, @RequestParam Long userId) {
         messageService.recallMessage(userId, messageId);
