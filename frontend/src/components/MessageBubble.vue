@@ -19,13 +19,41 @@
             <div v-for="(block, idx) in contentBlocks" :key="idx" class="content-block">
               <div v-if="block.type === 'text'" class="text-msg" v-html="renderMarkdown(block.content)" />
               <div v-else-if="block.type === 'image'" class="image-msg">
-                <el-image :src="block.url" :preview-src-list="[block.url]" fit="cover" class="msg-image" preview-teleported />
+                <el-image :src="block.url" :preview-src-list="[block.url]" fit="cover" class="msg-image" preview-teleported>
+                  <template #placeholder>
+                    <div class="image-placeholder">
+                      <div class="loading-spinner"></div>
+                    </div>
+                  </template>
+                  <template #error>
+                    <div class="image-error">图片加载失败</div>
+                  </template>
+                </el-image>
               </div>
             </div>
           </template>
-          <!-- 单条图片 -->
-          <div v-else-if="message.contentType === 'IMAGE'" class="image-msg">
-            <el-image :src="message.content" :preview-src-list="[message.content]" fit="cover" class="msg-image" preview-teleported />
+          <!-- 单条图片（contentType为IMAGE或content是图片JSON） -->
+          <div v-else-if="message.contentType === 'IMAGE' || isSingleImageBlock" class="image-msg">
+            <el-image v-if="message.content.startsWith('http')" :src="message.content" :preview-src-list="[message.content]" fit="cover" class="msg-image" preview-teleported>
+              <template #placeholder>
+                <div class="image-placeholder">
+                  <div class="loading-spinner"></div>
+                </div>
+              </template>
+              <template #error>
+                <div class="image-error">图片加载失败</div>
+              </template>
+            </el-image>
+            <el-image v-else-if="message.content.startsWith('[')" :src="getImageUrlFromJson(message.content)" :preview-src-list="[getImageUrlFromJson(message.content)]" fit="cover" class="msg-image" preview-teleported>
+              <template #placeholder>
+                <div class="image-placeholder">
+                  <div class="loading-spinner"></div>
+                </div>
+              </template>
+              <template #error>
+                <div class="image-error">图片加载失败</div>
+              </template>
+            </el-image>
           </div>
           <!-- 单条文件 -->
           <div v-else-if="message.contentType === 'FILE'" class="file-msg">📎 {{ message.content }}</div>
@@ -87,6 +115,11 @@ const contentBlocks = computed<ContentBlock[]>(() => {
   return []
 })
 
+// 检查是否单个图片块
+const isSingleImageBlock = computed(() => {
+  return contentBlocks.value.length === 1 && contentBlocks.value[0].type === 'image'
+})
+
 function renderMarkdown(text: string): string {
   if (!text) return ''
   try {
@@ -94,6 +127,16 @@ function renderMarkdown(text: string): string {
   } catch {
     return text
   }
+}
+
+function getImageUrlFromJson(jsonStr: string): string {
+  try {
+    const arr = JSON.parse(jsonStr)
+    if (Array.isArray(arr) && arr[0]?.url) {
+      return arr[0].url
+    }
+  } catch { /* ignore */ }
+  return jsonStr
 }
 
 const avatarText = computed(() => {
@@ -225,6 +268,37 @@ function formatTime(time: string) {
   border-radius: 8px;
   cursor: pointer;
   display: block;
+}
+.image-placeholder {
+  width: 120px;
+  height: 120px;
+  background: linear-gradient(135deg, #f0f0f0 0%, #e0e0e0 100%);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid #d0d0d0;
+  border-top-color: #4F46E5;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.image-error {
+  width: 120px;
+  height: 120px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #999;
+  font-size: 12px;
 }
 .file-msg {
   background: var(--surface-2);

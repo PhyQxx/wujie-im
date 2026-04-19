@@ -98,20 +98,34 @@ async function fetchEncrypted(method: 'GET' | 'POST' | 'PUT', url: string, data?
   })
 
   const text = await response.text()
+  console.log('[fetchEncrypted] url:', url, 'response前50:', text.substring(0, 50))
 
-  // 解密响应
-  let decryptedJson
-  try {
-    decryptedJson = decrypt(text)
-  } catch {
-    throw new Error('响应解密失败')
-  }
-
+  // 检查是否是明文JSON响应
   let res
-  try {
-    res = JSON.parse(decryptedJson)
-  } catch {
-    throw new Error('响应格式错误')
+  if (text.trim().startsWith('{')) {
+    // 明文JSON，直接解析
+    console.log('[fetchEncrypted] 明文响应，直接解析')
+    try {
+      res = JSON.parse(text)
+    } catch {
+      throw new Error('响应格式错误')
+    }
+  } else {
+    // 加密响应，需要解密
+    let decryptedJson
+    try {
+      decryptedJson = decrypt(text)
+    } catch (e: any) {
+      console.error('[fetchEncrypted] 解密失败:', e.message)
+      throw new Error('响应解密失败')
+    }
+
+    try {
+      res = JSON.parse(decryptedJson)
+    } catch {
+      console.error('[fetchEncrypted] JSON解析失败, decrypted:', decryptedJson)
+      throw new Error('响应格式错误')
+    }
   }
 
   if (res.code !== 200) {

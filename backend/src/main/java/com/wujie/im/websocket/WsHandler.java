@@ -8,6 +8,7 @@ import com.wujie.im.entity.Message;
 import com.wujie.im.service.ConversationService;
 import com.wujie.im.service.GroupService;
 import com.wujie.im.service.MessageService;
+import com.wujie.im.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -31,6 +32,8 @@ public class WsHandler implements WebSocketHandler {
     private ConversationService conversationService;
     @Autowired
     private GroupService groupService;
+    @Autowired
+    private UserService userService;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -94,6 +97,8 @@ public class WsHandler implements WebSocketHandler {
             Long userId = jwtUtil.getUserId(token);
             log.info("WebSocket认证成功: userId={}, userIdType={}, sessionId={}, onlineUsers.size={}, onlineUsers={}", userId, userId != null ? userId.getClass().getName() : "null", session.getId(), onlineUsers.size(), onlineUsers.keySet());
             onlineUsers.put(userId, session);
+            session.getAttributes().put("userId", userId);
+            userService.updateStatus(userId, "ONLINE");
             log.info("WebSocket认证后 onlineUsers: {}", onlineUsers.keySet());
             session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":200,\"msg\":\"认证成功\"}}"));
         } catch (io.jsonwebtoken.security.SignatureException e) {
@@ -138,13 +143,29 @@ public class WsHandler implements WebSocketHandler {
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
         log.error("WebSocket传输错误: {}", exception.getMessage());
-        onlineUsers.entrySet().removeIf(entry -> entry.getValue().equals(session));
+        Long userId = (Long) session.getAttributes().get("userId");
+        if (userId != null) {
+            WebSocketSession currentSession = onlineUsers.get(userId);
+            // 只有当前session关闭时才更新状态，新session已连接则不更新
+            if (session.equals(currentSession)) {
+                onlineUsers.remove(userId);
+                userService.updateStatus(userId, "OFFLINE");
+            }
+        }
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus closeStatus) throws Exception {
         log.info("WebSocket连接关闭: sessionId={}, status={}, onlineUsers.size={}", session.getId(), closeStatus, onlineUsers.size());
-        onlineUsers.entrySet().removeIf(entry -> entry.getValue().equals(session));
+        Long userId = (Long) session.getAttributes().get("userId");
+        if (userId != null) {
+            WebSocketSession currentSession = onlineUsers.get(userId);
+            // 只有当前session关闭时才更新状态，新session已连接则不更新
+            if (session.equals(currentSession)) {
+                onlineUsers.remove(userId);
+                userService.updateStatus(userId, "OFFLINE");
+            }
+        }
         log.info("WebSocket连接关闭后 onlineUsers: {}", onlineUsers);
     }
 

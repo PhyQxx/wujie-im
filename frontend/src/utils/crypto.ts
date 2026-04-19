@@ -25,6 +25,7 @@ export function encrypt(text: string): string {
  * AES-CBC 解密
  */
 export function decrypt(cipherText: string): string {
+  console.log('[Decrypt] 密文前50字符:', cipherText.substring(0, 50))
   const key = CryptoJS.enc.Utf8.parse(SECRET_KEY.substring(0, 32))
   const iv = CryptoJS.enc.Utf8.parse(IV)
 
@@ -36,6 +37,7 @@ export function decrypt(cipherText: string): string {
 
   // 使用 stringify 代替 toString
   const result = CryptoJS.enc.Utf8.stringify(decrypted)
+  console.log('[Decrypt] 解密结果:', result)
   if (!result) {
     throw new Error('AES解密结果为空')
   }

@@ -38,7 +38,7 @@ public class AuthService {
         user.setEmail(email);
         user.setStatus(1);
         user.setRole("USER");
-        user.setUserStatus("ONLINE");
+        user.setUserStatus("OFFLINE");
         userMapper.insert(user);
 
         UserProfile profile = new UserProfile();

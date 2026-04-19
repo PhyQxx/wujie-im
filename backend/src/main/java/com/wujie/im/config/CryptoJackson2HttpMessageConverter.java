@@ -22,6 +22,7 @@ public class CryptoJackson2HttpMessageConverter extends AbstractHttpMessageConve
 
     private final AesUtil aesUtil;
     private final ObjectMapper objectMapper;
+    private final ThreadLocal<String> currentPath = new ThreadLocal<>();
 
     // 不需要解密的路径
     private static final String[] NO_DECRYPT_PATHS = {
@@ -54,6 +55,13 @@ public class CryptoJackson2HttpMessageConverter extends AbstractHttpMessageConve
             log.debug("无法获取请求路径", e);
         }
 
+        // 存储路径供writeInternal使用
+        // 如果路径为空，设置为不需要加密的路径
+        if (path == null || path.isEmpty()) {
+            path = "/empty-path";
+        }
+        currentPath.set(path);
+
         // 检查是否需要解密
         if (!shouldDecrypt(path)) {
             return objectMapper.readValue(inputMessage.getBody(), Map.class);
@@ -61,12 +69,19 @@ public class CryptoJackson2HttpMessageConverter extends AbstractHttpMessageConve
 
         // 读取 body
         String body = readBody(inputMessage.getBody());
-        log.info("收到加密请求: {} body长度={}", path, body.length());
+        log.info("收到请求: {} body长度={}", path, body.length());
+
+        // 如果body是明文JSON（以{开头），直接解析
+        if (body.trim().startsWith("{")) {
+            log.info("明文请求，直接解析");
+            return objectMapper.readValue(body, Map.class);
+        }
 
         // 解密
         String decrypted = aesUtil.decrypt(body);
         if (decrypted == null) {
             log.error("解密失败");
+            currentPath.remove();
             throw new HttpMessageNotReadableException("解密失败");
         }
         log.info("解密成功: {}", decrypted);
@@ -96,12 +111,23 @@ public class CryptoJackson2HttpMessageConverter extends AbstractHttpMessageConve
 
     @Override
     protected void writeInternal(Object object, org.springframework.http.HttpOutputMessage outputMessage) throws IOException {
-        // 响应加密：序列化为JSON后加密
+        // 获取readInternal存储的路径
+        String path = currentPath.get();
+        currentPath.remove();
+
         String json = objectMapper.writeValueAsString(object);
-        log.info("响应JSON长度: {}", json.length());
-        String encrypted = aesUtil.encrypt(json);
-        log.info("加密后长度: {}", encrypted.length());
-        outputMessage.getHeaders().setContentType(MediaType.parseMediaType("text/plain;charset=UTF-8"));
-        outputMessage.getBody().write(encrypted.getBytes(StandardCharsets.UTF_8));
+
+        // 检查是否需要加密（路径为空或不匹配加密路径时不加密）
+        if (path != null && !path.isEmpty() && !"/empty-path".equals(path) && shouldDecrypt(path)) {
+            // 响应加密
+            log.info("响应加密: {}, JSON长度={}", path, json.length());
+            String encrypted = aesUtil.encrypt(json);
+            outputMessage.getHeaders().setContentType(MediaType.parseMediaType("text/plain;charset=UTF-8"));
+            outputMessage.getBody().write(encrypted.getBytes(StandardCharsets.UTF_8));
+        } else {
+            // 不加密，直接返回JSON
+            outputMessage.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+            outputMessage.getBody().write(json.getBytes(StandardCharsets.UTF_8));
+        }
     }
 }
