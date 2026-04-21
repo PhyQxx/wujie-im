@@ -65,6 +65,7 @@ public class ConversationController {
             @PathVariable Long id,
             @RequestParam(required = false) Long beforeId,
             @RequestParam(defaultValue = "50") int limit) {
+        System.out.println("[getMessages] id=" + id + " beforeId=" + beforeId + " limit=" + limit);
         Conversation conv = conversationService.getConversationById(id);
         List<Message> messages;
         if (conv != null && "SINGLE".equals(conv.getType())) {

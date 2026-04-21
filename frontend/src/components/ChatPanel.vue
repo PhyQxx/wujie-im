@@ -25,6 +25,14 @@
       </div>
 
       <div class="messages" ref="messageListRef" @scroll="onMessageScroll">
+        <!-- 加载更多指示器 -->
+        <div v-if="loadingMore" class="loading-more">
+          <span class="loading-spinner"></span>
+          <span>加载中...</span>
+        </div>
+        <div v-else-if="!hasMore && messages.length > 0" class="loading-more no-more">
+          — 已加载全部消息 —
+        </div>
         <div class="date-divider"><span>今天</span></div>
         <MessageBubble
           v-for="msg in messages"
@@ -137,6 +145,10 @@ const pendingImages = ref<string[]>([]) // 待发送的图片 URL 列表
 const isEditing = ref(false) // 编辑器是否获得焦点
 const editorRows = ref(1) // textarea 行数
 
+// 来自 store
+const loadingMore = computed(() => messageStore.loadingMore)
+const hasMore = computed(() => messageStore.hasMore)
+
 const emojis = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','😇','🙂','🙃','😉','😌','😍','🥰','😘','😗','😙','😚','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😌','😔','😪','🤤','😴','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','😎','🤓','🧐','😕','😟','🙁','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','👾','🤖']
 
 const currentConversation = computed(() => conversationStore.currentConversation)
@@ -152,7 +164,13 @@ watch(currentConversation, (conv) => {
   if (conv) {
     userHasScrolledUp.value = false // 重置滚动状态
     messageStore.fetchMessages(conv.id).then(() => {
-      nextTick(() => scrollToBottom())
+      nextTick(() => {
+        scrollToBottom()
+        // 记录初始滚动高度
+        if (messageListRef.value) {
+          (messageListRef.value as any).__oldScrollHeight = messageListRef.value.scrollHeight
+        }
+      })
     })
   }
 }, { immediate: true })
@@ -343,6 +361,25 @@ function onMessageScroll() {
   const distToBottom = el.scrollHeight - el.scrollTop - el.clientHeight
   // 用户滚动到距离底部超过100px，认为是主动向上滑动
   userHasScrolledUp.value = distToBottom > 100
+
+  // 滚动到顶部且有更多消息时，加载更多
+  if (el.scrollTop < 100 && !loadingMore.value && hasMore.value && messages.value.length > 0) {
+    const oldestMsg = messages.value[0]
+    if (oldestMsg) {
+      console.log('[loadMore] trigger oldestMsg.id=' + oldestMsg.id + ' currentConvId=' + currentConversation.value?.id)
+      messageStore.fetchMessages(currentConversation.value!.id, oldestMsg.id).then(() => {
+        nextTick(() => {
+          // 恢复滚动位置（保持用户看到的相对位置不变）
+          if (messageListRef.value) {
+            const newHeight = messageListRef.value.scrollHeight
+            const oldHeight = (messageListRef.value as any).__oldScrollHeight || newHeight
+            messageListRef.value.scrollTop = newHeight - oldHeight
+            ;(messageListRef.value as any).__oldScrollHeight = newHeight
+          }
+        })
+      })
+    }
+  }
 }
 
 defineExpose({ scrollToBottom, setReplyingTo })
@@ -373,6 +410,17 @@ defineExpose({ scrollToBottom, setReplyingTo })
 .messages {
   flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;
 }
+.loading-more {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 8px 0; font-size: 11px; color: var(--text-secondary, #6B7280);
+}
+.loading-more.no-more { color: var(--text-secondary, #9CA3AF); }
+.loading-spinner {
+  display: inline-block; width: 12px; height: 12px;
+  border: 2px solid var(--border, #E5E7EB); border-top-color: var(--primary, #4F46E5);
+  border-radius: 50%; animation: spin 0.8s linear infinite;
+}
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 .date-divider {
   text-align: center; font-size: 11px; color: var(--text-secondary, #6B7280); padding: 4px 0; position: relative;
 }

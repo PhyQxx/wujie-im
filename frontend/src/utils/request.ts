@@ -83,12 +83,23 @@ async function messageCryptoFetch(method: 'POST' | 'PUT', url: string, data?: an
 }
 
 /** GET 请求的加密响应解密（用于 /api/message/* 和 /api/conversation/*） */
-async function cryptoGetFetch(url: string): Promise<any> {
+async function cryptoGetFetch(url: string, config?: any): Promise<any> {
   const token = localStorage.getItem('accessToken')
   const headers: Record<string, string> = {}
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const response = await fetch('/api' + url, { method: 'GET', headers })
+  // 附加 query params
+  let finalUrl = '/api' + url
+  if (config?.params) {
+    const searchParams = new URLSearchParams()
+    for (const [k, v] of Object.entries(config.params)) {
+      if (v !== undefined && v !== null) searchParams.append(k, String(v))
+    }
+    const qs = searchParams.toString()
+    if (qs) finalUrl += '?' + qs
+  }
+
+  const response = await fetch(finalUrl, { method: 'GET', headers })
   const text = await response.text()
 
   let res: any
@@ -118,7 +129,7 @@ async function cryptoGetFetch(url: string): Promise<any> {
 const api = {
   get: <T = any>(url: string, config?: any) => {
     if (url.startsWith('/message') || url.startsWith('/conversation')) {
-      return cryptoGetFetch(url) as Promise<T>
+      return cryptoGetFetch(url, config) as Promise<T>
     }
     return request.get<T>(url, config)
   },

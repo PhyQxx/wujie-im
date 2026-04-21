@@ -8,6 +8,8 @@ import { useConversationStore } from './conversation'
 export const useMessageStore = defineStore('message', () => {
   const messages = ref<Message[]>([])
   const loading = ref(false)
+  const loadingMore = ref(false)
+  const hasMore = ref(true)
   const lastReadId = ref<number>(0)
 
   function initWsListener() {
@@ -56,21 +58,36 @@ export const useMessageStore = defineStore('message', () => {
   }
 
   async function fetchMessages(conversationId: number, beforeId?: number) {
-    loading.value = true
+    const isLoadMore = !!beforeId
+    if (isLoadMore) {
+      loadingMore.value = true
+    } else {
+      loading.value = true
+      hasMore.value = true
+    }
     try {
       const res = await request.get('/conversation/' + conversationId + '/messages', {
         params: beforeId ? { beforeId } : {}
       })
       const newMessages: Message[] = res.data || []
       console.log('[fetchMessages] convId=' + conversationId + ' count=' + newMessages.length + ' beforeId=' + beforeId)
-      if (beforeId) {
+      if (isLoadMore) {
         messages.value.unshift(...newMessages)
+        // 只有返回比一页更少的消息，才认为没有更多了
+        if (newMessages.length < 50) {
+          hasMore.value = false
+        }
+        console.log('[fetchMessages] loadMore done, msgs=' + messages.value.length + ' newCount=' + newMessages.length + ' oldestId=' + messages.value[0]?.id + ' hasMore=' + hasMore.value)
       } else {
         console.log('[fetchMessages] SET messages to ' + newMessages.length)
         messages.value = newMessages
       }
     } finally {
-      loading.value = false
+      if (isLoadMore) {
+        loadingMore.value = false
+      } else {
+        loading.value = false
+      }
     }
   }
 
@@ -113,10 +130,11 @@ export const useMessageStore = defineStore('message', () => {
   function clear() {
     messages.value = []
     lastReadId.value = 0
+    hasMore.value = true
   }
 
   return {
-    messages, loading, lastReadId,
+    messages, loading, loadingMore, hasMore, lastReadId,
     initWsListener, fetchMessages, sendMessage, recallMessage, markAsRead, clear
   }
 })
