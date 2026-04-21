@@ -32,14 +32,16 @@ public class CryptoResponseFilter extends OncePerRequestFilter {
 
         log.info("[CryptoResponse] 拦截响应: method={}, uri={}", request.getMethod(), uri);
 
-        if (!uri.startsWith("/api/message")) {
+        if (!uri.startsWith("/api/message") && !uri.startsWith("/api/conversation")) {
             log.info("[CryptoResponse] 非message路径，放行");
             filterChain.doFilter(request, response);
             return;
         }
 
+        String method = request.getMethod();
         String contentType = request.getContentType();
-        if (contentType == null || !contentType.contains("application/json")) {
+        // POST/PUT 必须有 application/json content-type，GET 请求跳过此检查
+        if (!"GET".equalsIgnoreCase(method) && (contentType == null || !contentType.contains("application/json"))) {
             log.info("[CryptoResponse] 非JSON内容类型: {}, 放行", contentType);
             filterChain.doFilter(request, response);
             return;

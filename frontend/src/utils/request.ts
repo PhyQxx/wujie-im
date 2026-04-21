@@ -82,10 +82,46 @@ async function messageCryptoFetch(method: 'POST' | 'PUT', url: string, data?: an
   return res
 }
 
+/** GET 请求的加密响应解密（用于 /api/message/* 和 /api/conversation/*） */
+async function cryptoGetFetch(url: string): Promise<any> {
+  const token = localStorage.getItem('accessToken')
+  const headers: Record<string, string> = {}
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  const response = await fetch('/api' + url, { method: 'GET', headers })
+  const text = await response.text()
+
+  let res: any
+  try {
+    res = JSON.parse(text)
+  } catch {
+    throw new Error('响应格式错误')
+  }
+
+  // 解密响应中的 data 字段
+  if (res && res.data !== undefined && res.data !== null && typeof res.data === 'string') {
+    try {
+      res.data = JSON.parse(decrypt(res.data))
+    } catch (e: any) {
+      console.warn('[cryptoGet] 解密响应 data 失败:', e.message)
+    }
+  }
+
+  if (res.code !== 200) {
+    ElMessage.error(res.msg || '请求失败')
+    throw res
+  }
+  return res
+}
+
 // 封装的请求方法
 const api = {
-  get: <T = any>(url: string, config?: any) =>
-    request.get<T>(url, config),
+  get: <T = any>(url: string, config?: any) => {
+    if (url.startsWith('/message') || url.startsWith('/conversation')) {
+      return cryptoGetFetch(url) as Promise<T>
+    }
+    return request.get<T>(url, config)
+  },
 
   post: <T = any>(url: string, data?: any, config?: any) => {
     if (url.startsWith('/message')) {
