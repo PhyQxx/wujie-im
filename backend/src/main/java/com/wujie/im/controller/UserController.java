@@ -1,6 +1,5 @@
 package com.wujie.im.controller;
 
-import com.wujie.im.common.Encrypt;
 import com.wujie.im.common.Result;
 import com.wujie.im.entity.User;
 import com.wujie.im.entity.UserProfile;
@@ -16,14 +15,12 @@ public class UserController {
     @Autowired
     private UserService userService;
 
-    @Encrypt
     @GetMapping("/list")
     public Result<List<User>> listUsers(@RequestParam(required = false) String keyword,
                                          @RequestParam(required = false) Long excludeId) {
         return Result.success(userService.listUsers(keyword, excludeId));
     }
 
-    @Encrypt
     @GetMapping("/{id}")
     public Result<User> getUserById(@PathVariable Long id) {
         User user = userService.getUserById(id);
@@ -31,7 +28,6 @@ public class UserController {
         return Result.success(user);
     }
 
-    @Encrypt
     @PutMapping("/status")
     public Result<Void> updateStatus(@RequestBody Map<String, String> params) {
         Long userId = Long.parseLong(params.get("userId"));
@@ -40,13 +36,11 @@ public class UserController {
         return Result.success();
     }
 
-    @Encrypt
     @GetMapping("/profile/{userId}")
     public Result<UserProfile> getProfile(@PathVariable Long userId) {
         return Result.success(userService.getProfile(userId));
     }
 
-    @Encrypt
     @PutMapping("/profile")
     public Result<Void> updateProfile(@RequestBody UserProfile profile) {
         userService.updateProfile(profile);

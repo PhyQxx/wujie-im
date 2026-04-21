@@ -4,7 +4,6 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.wujie.im.common.JwtUtil;
 import com.wujie.im.entity.Conversation;
-import com.wujie.im.entity.Message;
 import com.wujie.im.service.ConversationService;
 import com.wujie.im.service.GroupService;
 import com.wujie.im.service.MessageService;
@@ -34,6 +33,8 @@ public class WsHandler implements WebSocketHandler {
     private GroupService groupService;
     @Autowired
     private UserService userService;
+    @Autowired
+    private WsCryptoService wsCryptoService;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -114,17 +115,43 @@ public class WsHandler implements WebSocketHandler {
     }
 
     private void handleSendMessage(JSONObject json) {
-        Long senderId = json.getLong("senderId");
-        Long conversationId = json.getLong("conversationId");
-        String content = json.getStr("content");
-        String contentType = json.getStr("contentType", "TEXT");
-        String metaStr = json.getStr("meta");
+        // 支持两种格式：
+        // 1. 新格式（加密）: { type: "send_message", data: AES({senderId, conversationId, content, contentType, meta, replyId}) }
+        // 2. 旧格式（明文）: { type: "send_message", senderId, conversationId, content, ... }
+        Long senderId;
+        Long conversationId;
+        String content;
+        String contentType;
+        String metaStr;
+
+        if (json.containsKey("data")) {
+            // 新格式：解密 data 字段
+            String encryptedData = json.getStr("data");
+            String decryptedJson = wsCryptoService.decryptData(encryptedData);
+            if (decryptedJson == null) {
+                log.error("[WS] send_message 解密 data 失败");
+                return;
+            }
+            JSONObject dataObj = JSONUtil.parseObj(decryptedJson);
+            senderId = dataObj.getLong("senderId");
+            conversationId = dataObj.getLong("conversationId");
+            content = dataObj.getStr("content");
+            contentType = dataObj.getStr("contentType", "TEXT");
+            metaStr = dataObj.getStr("meta");
+        } else {
+            // 旧格式：直接读取字段
+            senderId = json.getLong("senderId");
+            conversationId = json.getLong("conversationId");
+            content = json.getStr("content");
+            contentType = json.getStr("contentType", "TEXT");
+            metaStr = json.getStr("meta");
+        }
 
         log.info("handleSendMessage: senderId={}, conversationId={}, content={}", senderId, conversationId, content);
 
         // 保存消息（meta中可能包含atAll字段），推送由MessageService内部处理
-        Message msg = messageService.sendMessage(senderId, conversationId, content, contentType, metaStr);
-        log.info("handleSendMessage: saved msgId={}, senderId={}, conversationId={}", msg.getId(), msg.getSenderId(), msg.getConversationId());
+        messageService.sendMessage(senderId, conversationId, content, contentType, metaStr);
+        log.info("handleSendMessage: saved senderId={}, conversationId={}", senderId, conversationId);
     }
 
     private void handleReadMessage(JSONObject json) {
@@ -187,6 +214,25 @@ public class WsHandler implements WebSocketHandler {
         } else {
             log.warn("sendToUser: user not online or session null, userId={}", userId);
         }
+    }
+
+    /**
+     * 发送加密消息：只对 type=message 的 data 字段加密
+     */
+    public void sendToUser(Long userId, String type, Object data) {
+        String message;
+        if ("message".equals(type) && data != null) {
+            // 只对 type=message 的 data 加密
+            String encryptedData = wsCryptoService.encryptData(data);
+            if (encryptedData == null) {
+                log.error("[WS] 加密 message data 失败，不发送");
+                return;
+            }
+            message = JSONUtil.toJsonStr(Map.of("type", type, "data", encryptedData));
+        } else {
+            message = JSONUtil.toJsonStr(Map.of("type", type, "data", data));
+        }
+        sendToUser(userId, message);
     }
 
     public boolean isOnline(Long userId) {

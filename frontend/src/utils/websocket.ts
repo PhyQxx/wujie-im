@@ -1,4 +1,5 @@
 import { ElMessage } from 'element-plus'
+import { decrypt } from './crypto'
 import type { WsMessage } from '@/types'
 
 class WsClient {
@@ -30,7 +31,17 @@ class WsClient {
 
     this.ws.onmessage = (event) => {
       try {
-        const msg: WsMessage = JSON.parse(event.data)
+        const raw = JSON.parse(event.data)
+        const msg: WsMessage = { type: raw.type, data: raw.data }
+        // type=message 时 data 字段是加密的，需要解密
+        if (msg.type === 'message' && typeof msg.data === 'string') {
+          try {
+            const decrypted = decrypt(msg.data)
+            msg.data = JSON.parse(decrypted)
+          } catch (e) {
+            console.error('[WS] 解密 message data 失败', e)
+          }
+        }
         const handlers = this.handlers.get(msg.type)
         if (handlers) {
           handlers.forEach(h => h(msg.data))

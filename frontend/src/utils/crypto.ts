@@ -18,7 +18,8 @@ export function encrypt(text: string): string {
     padding: CryptoJS.pad.Pkcs7
   })
 
-  return encrypted.toString()
+  // 直接取 ciphertext 并转为 Base64，避免 OpenSSL 格式混入 Salt 元数据
+  return CryptoJS.enc.Base64.stringify(encrypted.ciphertext)
 }
 
 /**

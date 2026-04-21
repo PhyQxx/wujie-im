@@ -1,6 +1,5 @@
 package com.wujie.im.controller;
 
-import com.wujie.im.common.Encrypt;
 import com.wujie.im.common.Result;
 import com.wujie.im.entity.FriendRequest;
 import com.wujie.im.entity.User;
@@ -19,7 +18,6 @@ public class FriendController {
     @Autowired
     private UserMapper userMapper;
 
-    @Encrypt
     @PostMapping("/request")
     public Result<Void> sendRequest(@RequestBody Map<String, Object> params) {
         try {
@@ -34,7 +32,6 @@ public class FriendController {
         }
     }
 
-    @Encrypt
     @GetMapping("/requests/{userId}")
     public Result<List<FriendRequest>> getRequests(@PathVariable Long userId) {
         List<FriendRequest> requests = friendService.getRequests(userId);
@@ -47,27 +44,23 @@ public class FriendController {
         return Result.success(requests);
     }
 
-    @Encrypt
     @PutMapping("/request/{requestId}")
     public Result<Void> handleRequest(@PathVariable Long requestId, @RequestParam String action) {
         friendService.handleRequest(requestId, action);
         return Result.success();
     }
 
-    @Encrypt
     @GetMapping("/list/{userId}")
     public Result<List<Map<String, Object>>> getFriends(@PathVariable Long userId) {
         return Result.success(friendService.getFriends(userId));
     }
 
-    @Encrypt
     @DeleteMapping("/{userId}/{friendId}")
     public Result<Void> deleteFriend(@PathVariable Long userId, @PathVariable Long friendId) {
         friendService.deleteFriend(userId, friendId);
         return Result.success();
     }
 
-    @Encrypt
     @PutMapping("/move")
     public Result<Void> moveFriendToGroup(@RequestBody Map<String, Object> params) {
         friendService.moveFriendToGroup(
@@ -78,7 +71,6 @@ public class FriendController {
         return Result.success();
     }
 
-    @Encrypt
     @PutMapping("/remark")
     public Result<Void> setFriendRemark(@RequestBody Map<String, Object> params) {
         friendService.setFriendRemark(

@@ -1,6 +1,5 @@
 package com.wujie.im.controller;
 
-import com.wujie.im.common.Encrypt;
 import com.wujie.im.common.Result;
 import com.wujie.im.entity.Conversation;
 import com.wujie.im.entity.GroupInfo;
@@ -27,7 +26,6 @@ public class ConversationController {
     @Autowired
     private GroupInfoMapper groupInfoMapper;
 
-    @Encrypt
     @GetMapping("/list/{userId}")
     public Result<List<Conversation>> getConversations(@PathVariable Long userId) {
         List<Conversation> list = conversationService.getConversations(userId);
@@ -45,26 +43,23 @@ public class ConversationController {
         return Result.success(list);
     }
 
-    @Encrypt
     @PostMapping("/single")
-    public Result<Conversation> createSingleConversation(@RequestBody Map<String, Long> params) {
+    public Result<Conversation> createSingleConversation(@RequestBody Map<String, Object> params) {
         return Result.success(conversationService.getOrCreateSingleConversation(
-                params.get("userId"), params.get("otherUserId")
+                toLong(params.get("userId")), toLong(params.get("otherUserId"))
         ));
     }
 
-    @Encrypt
     @PostMapping("/group")
-    public Result<Conversation> createGroupConversation(@RequestBody Map<String, Long> params) {
+    public Result<Conversation> createGroupConversation(@RequestBody Map<String, Object> params) {
         Conversation conv = conversationService.getOrCreateGroupConversation(
-                params.get("userId"), params.get("groupId")
+                toLong(params.get("userId")), toLong(params.get("groupId"))
         );
         GroupInfo group = groupInfoMapper.selectById(conv.getTypeId());
         conv.setGroupInfo(group);
         return Result.success(conv);
     }
 
-    @Encrypt
     @GetMapping("/{id}/messages")
     public Result<List<Message>> getMessages(
             @PathVariable Long id,
@@ -88,5 +83,12 @@ public class ConversationController {
             messages = messageService.getMessages(id, beforeId, limit);
         }
         return Result.success(messages);
+    }
+
+    private Long toLong(Object val) {
+        if (val == null) return null;
+        if (val instanceof Long) return (Long) val;
+        if (val instanceof Integer) return ((Integer) val).longValue();
+        return Long.parseLong(val.toString());
     }
 }

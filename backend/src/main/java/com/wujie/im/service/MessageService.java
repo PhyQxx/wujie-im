@@ -82,9 +82,9 @@ public class MessageService {
         if ("SINGLE".equals(conv.getType())) {
             Long otherUserId = conv.getTypeId();
             if (!otherUserId.equals(excludeUserId)) {
-                wsHandler.sendToUser(otherUserId, JSONUtil.toJsonStr(Map.of("type", "message", "data", msg)));
+                wsHandler.sendToUser(otherUserId, "message", msg);
             }
-            wsHandler.sendToUser(excludeUserId, JSONUtil.toJsonStr(Map.of("type", "message", "data", msg)));
+            wsHandler.sendToUser(excludeUserId, "message", msg);
         } else if ("GROUP".equals(conv.getType())) {
             List<GroupMember> members = groupMemberMapper.selectList(
                     new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getGroupId, conv.getTypeId())
@@ -104,11 +104,10 @@ public class MessageService {
                 pushMsg.setCreateTime(msg.getCreateTime());
                 pushMsg.setRecall(msg.getRecall());
 
-                String pushJson = JSONUtil.toJsonStr(Map.of("type", "message", "data", pushMsg));
                 if (!m.getUserId().equals(excludeUserId)) {
-                    wsHandler.sendToUser(m.getUserId(), pushJson);
+                    wsHandler.sendToUser(m.getUserId(), "message", pushMsg);
                 } else {
-                    wsHandler.sendToUser(excludeUserId, pushJson);
+                    wsHandler.sendToUser(excludeUserId, "message", pushMsg);
                 }
             }
         }
