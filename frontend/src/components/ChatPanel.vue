@@ -155,12 +155,8 @@ const currentConversation = computed(() => conversationStore.currentConversation
 const messages = computed(() => messageStore.messages)
 const currentUserId = computed(() => Number(localStorage.getItem('userId')))
 
-onMounted(() => { console.log('[ChatPanel mounted] currentConv=' + conversationStore.currentConversation?.id) })
-onUnmounted(() => { console.log('[ChatPanel unmounted]') })
-
 // 切换会话时加载历史消息
 watch(currentConversation, (conv) => {
-  console.log('[watch currentConversation] conv=' + conv?.id + ' type=' + conv?.type)
   if (conv) {
     userHasScrolledUp.value = false // 重置滚动状态
     messageStore.fetchMessages(conv.id).then(() => {
@@ -366,7 +362,6 @@ function onMessageScroll() {
   if (el.scrollTop < 100 && !loadingMore.value && hasMore.value && messages.value.length > 0) {
     const oldestMsg = messages.value[0]
     if (oldestMsg) {
-      console.log('[loadMore] trigger oldestMsg.id=' + oldestMsg.id + ' currentConvId=' + currentConversation.value?.id)
       messageStore.fetchMessages(currentConversation.value!.id, oldestMsg.id).then(() => {
         nextTick(() => {
           // 恢复滚动位置（保持用户看到的相对位置不变）

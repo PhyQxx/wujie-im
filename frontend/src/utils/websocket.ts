@@ -22,7 +22,6 @@ class WsClient {
     this.ws = new WebSocket(this.url)
 
     this.ws.onopen = () => {
-      console.log('[WS] 连接建立，发送auth消息')
       // 使用 refreshToken 认证（有效期7天），避免 accessToken（15分钟）过期导致 WS 掉线
       const refreshToken = localStorage.getItem('refreshToken')
       this.send({ type: 'auth', token: refreshToken })

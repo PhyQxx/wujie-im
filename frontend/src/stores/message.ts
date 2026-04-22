@@ -22,7 +22,6 @@ export const useMessageStore = defineStore('message', () => {
         const isCurrentConv = currentConvId && msg.conversationId === currentConvId
         const exists = messages.value.some(m => m.id === msg.id)
         if (!exists) {
-          console.log('[WS message] added msg.id=' + msg.id + ' convId=' + msg.conversationId + ' curConvId=' + currentConvId)
           messages.value.push(msg)
           if (isCurrentConv) {
             // 当前会话消息，滚动到底部
@@ -70,16 +69,13 @@ export const useMessageStore = defineStore('message', () => {
         params: beforeId ? { beforeId } : {}
       })
       const newMessages: Message[] = res.data || []
-      console.log('[fetchMessages] convId=' + conversationId + ' count=' + newMessages.length + ' beforeId=' + beforeId)
       if (isLoadMore) {
         messages.value.unshift(...newMessages)
         // 只有返回比一页更少的消息，才认为没有更多了
         if (newMessages.length < 50) {
           hasMore.value = false
         }
-        console.log('[fetchMessages] loadMore done, msgs=' + messages.value.length + ' newCount=' + newMessages.length + ' oldestId=' + messages.value[0]?.id + ' hasMore=' + hasMore.value)
       } else {
-        console.log('[fetchMessages] SET messages to ' + newMessages.length)
         messages.value = newMessages
       }
     } finally {

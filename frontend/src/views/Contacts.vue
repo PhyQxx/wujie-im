@@ -467,7 +467,6 @@ async function startChat() {
 async function enterGroupChat() {
   if (!selectedGroup.value) return
   const conv = await conversationStore.createConversation('GROUP', selectedGroup.value.id)
-  console.log('[enterGroupChat] conv.id=' + conv.id + ' groupId=' + selectedGroup.value.id)
   conversationStore.setCurrentConversation(conv)
   router.push('/conversation')
 }

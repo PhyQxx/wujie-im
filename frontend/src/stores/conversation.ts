@@ -20,7 +20,6 @@ export const useConversationStore = defineStore('conversation', () => {
   }
 
   function setCurrentConversation(conv: Conversation) {
-    console.log('[setCurrentConversation] conv.id=' + conv.id)
     currentConversation.value = conv
     // clear unread
     const idx = conversations.value.findIndex(c => c.id === conv.id)
