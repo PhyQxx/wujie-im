@@ -20,6 +20,7 @@ npm run preview      # Preview production build
 ### Backend (SpringBoot 3.2.0 + Maven)
 ```bash
 cd backend
+export JAVA_HOME=/home/phy/.jdks/corretto-17.0.18  # Required: Java 17+ for Spring Boot 3.2 Maven plugin
 mvn clean package    # Build JAR
 mvn spring-boot:run  # Run directly
 # Requires: MySQL (mysql.pnkx.top:13306), Redis (127.0.0.1:6379)
@@ -55,6 +56,6 @@ mvn spring-boot:run  # Run directly
 
 ## Configuration
 
-- **Frontend proxy**: Vite proxies `/api` → `localhost:18092` and `/ws` → `ws://localhost:18092`
-- **Backend server**: Port 18092 (configured in `application.yml`)
+- **Frontend proxy**: Vite proxies `/api` → `localhost:19082` and `/ws` → `ws://localhost:19082`
+- **Backend server**: Port 19082 (configured in `application.yml`)
 - **MyBatis-Plus**: Logic delete enabled (`deleted` field), auto-id, underscore-to-camel mapping

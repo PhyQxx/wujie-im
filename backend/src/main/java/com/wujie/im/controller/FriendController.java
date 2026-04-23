@@ -21,11 +21,12 @@ public class FriendController {
     @PostMapping("/request")
     public Result<Void> sendRequest(@RequestBody Map<String, Object> params) {
         try {
-            friendService.sendRequest(
-                    Long.valueOf(params.get("fromUserId").toString()),
-                    Long.valueOf(params.get("toUserId").toString()),
-                    (String) params.get("reason")
-            );
+            Long fromUserId = params.get("fromUserId") != null ? Long.valueOf(params.get("fromUserId").toString()) : null;
+            Long toUserId = params.get("toUserId") != null ? Long.valueOf(params.get("toUserId").toString()) : null;
+            if (fromUserId == null || toUserId == null) {
+                return Result.error(400, "缺少必要参数 fromUserId 或 toUserId");
+            }
+            friendService.sendRequest(fromUserId, toUserId, (String) params.get("reason"));
             return Result.success("申请已发送", null);
         } catch (RuntimeException e) {
             return Result.error(400, e.getMessage());
