@@ -76,7 +76,7 @@ mvn spring-boot:run  # 直接运行
 
 **后端配置** (`backend/src/main/resources/application.yml`):
 - 服务端口: `18092`
-- MySQL: `mysql.pnkx.top:13306`
+- MySQL: `127.0.0.1:3306`
 - Redis: `127.0.0.1:6379`
 
 ## 项目结构
