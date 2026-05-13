@@ -99,9 +99,10 @@ class WsClient {
   private scheduleReconnect() {
     if (this.reconnectTimer) return
     this.reconnectTimer = window.setTimeout(() => {
-      const token = localStorage.getItem('accessToken')
-      if (token) {
-        this.connect(token)
+      const refreshToken = localStorage.getItem('refreshToken')
+      const accessToken = localStorage.getItem('accessToken')
+      if (refreshToken || accessToken) {
+        this.connect(refreshToken || accessToken!)
       }
       this.reconnectTimer = null
     }, 3000)

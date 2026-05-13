@@ -49,6 +49,11 @@ wujie:
       heartbeat-interval: 30000
     crypto:
       aes-key: wujie-im-aes-256-key-2024-change-in-production
+    minio:
+      endpoint: http://127.0.0.1:9010
+      access-key: minioadmin
+      secret-key: minioadmin
+      bucket: wujie-im
     ai:
       minimax:
         api-url: https://api.minimax.chat/v1/text/chatcompletion_v2

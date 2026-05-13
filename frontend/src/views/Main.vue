@@ -73,12 +73,36 @@ onMounted(async () => {
   await notificationStore.fetchNotifications()
   await conversationStore.fetchConversations()
   messageStore.initWsListener()
+
+  // 请求浏览器通知权限
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission()
+  }
+
   wsClient.on('message', (msg: any) => {
     if (msg && msg.conversationId) {
       conversationStore.updateLastMessage(msg.conversationId, msg.content, msg.createTime)
+
+      // 浏览器通知（用户不在当前会话时）
+      const currentConv = conversationStore.currentConversation
+      if (!currentConv || currentConv.id !== msg.conversationId) {
+        sendBrowserNotification(msg)
+      }
     }
   })
 })
+
+function sendBrowserNotification(msg: any) {
+  if ('Notification' in window && Notification.permission === 'granted') {
+    const senderName = msg.sender?.username || '新消息'
+    const content = msg.content || ''
+    new Notification(senderName, {
+      body: content.length > 50 ? content.substring(0, 50) + '...' : content,
+      icon: '/favicon.ico',
+      tag: msg.id?.toString()
+    })
+  }
+}
 
 async function selectConversation(conv: Conversation) {
   conversationStore.setCurrentConversation(conv)

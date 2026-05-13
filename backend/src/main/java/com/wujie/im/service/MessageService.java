@@ -4,12 +4,16 @@ import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.wujie.im.entity.*;
 import com.wujie.im.mapper.*;
-import com.wujie.im.websocket.WsHandler;
-import com.wujie.im.service.ConversationService;
+import com.wujie.im.event.MessageSentEvent;
+import com.wujie.im.event.MessageReadEvent;
+import com.wujie.im.event.MessageRecalledEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import java.util.*;
+import java.util.stream.Collectors;
+import java.util.Objects;
 
 @Slf4j
 @Service
@@ -23,11 +27,11 @@ public class MessageService {
     @Autowired
     private GroupMemberMapper groupMemberMapper;
     @Autowired
-    @org.springframework.context.annotation.Lazy
-    private WsHandler wsHandler;
-    @Autowired
-    @org.springframework.context.annotation.Lazy
     private ConversationService conversationService;
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+    @Autowired
+    private ReadStatusService readStatusService;
 
     public Message sendMessage(Long senderId, Long conversationId, String content, String contentType) {
         return sendMessage(senderId, conversationId, content, contentType, null, null);
@@ -71,26 +75,28 @@ public class MessageService {
                         .set(Conversation::getLastMessageTime, msg.getCreateTime())
         );
 
-        // 推送消息给会话成员（每个成员收到自己的conversationId）
-        pushMessageToConversation(conv, msg, senderId);
+        // 发布消息发送事件，由 EventListener 处理 WebSocket 推送
+        eventPublisher.publishEvent(new MessageSentEvent(this, msg, conv, senderId));
         return msg;
     }
 
-    private void pushMessageToConversation(Conversation conv, Message msg, Long excludeUserId) {
+    /**
+     * 异步推送消息给会话成员（由 EventListener 调用）
+     */
+    public void pushMessageToConversationAsync(Conversation conv, Message msg, Long excludeUserId) {
         if (conv == null) return;
 
         if ("SINGLE".equals(conv.getType())) {
             Long otherUserId = conv.getTypeId();
             if (!otherUserId.equals(excludeUserId)) {
-                wsHandler.sendToUser(otherUserId, "message", msg);
+                conversationService.sendMessageToUser(otherUserId, msg);
             }
-            wsHandler.sendToUser(excludeUserId, "message", msg);
+            conversationService.sendMessageToUser(excludeUserId, msg);
         } else if ("GROUP".equals(conv.getType())) {
             List<GroupMember> members = groupMemberMapper.selectList(
                     new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getGroupId, conv.getTypeId())
             );
             for (GroupMember m : members) {
-                // 每个成员用各自的conversationId
                 Conversation memberConv = conversationService.getOrCreateGroupConversation(m.getUserId(), conv.getTypeId());
                 Message pushMsg = new Message();
                 pushMsg.setId(msg.getId());
@@ -104,23 +110,99 @@ public class MessageService {
                 pushMsg.setCreateTime(msg.getCreateTime());
                 pushMsg.setRecall(msg.getRecall());
 
-                if (!m.getUserId().equals(excludeUserId)) {
-                    wsHandler.sendToUser(m.getUserId(), "message", pushMsg);
-                } else {
-                    wsHandler.sendToUser(excludeUserId, "message", pushMsg);
-                }
+                conversationService.sendMessageToUser(m.getUserId(), pushMsg);
             }
         }
     }
 
     public List<Message> getMessages(Long conversationId, Long beforeId, int limit) {
+        // 限制 limit 范围，防止 SQL 注入
+        int safeLimit = Math.min(Math.max(1, limit), 100);
+
         LambdaQueryWrapper<Message> q = new LambdaQueryWrapper<Message>()
                 .eq(Message::getConversationId, conversationId)
                 .eq(Message::getRecall, 0)
-                .orderByDesc(Message::getId);
+                .orderByDesc(Message::getId)
+                .last("LIMIT " + safeLimit);
+
         if (beforeId != null) {
             q.lt(Message::getId, beforeId);
         }
+
+        List<Message> msgs = messageMapper.selectList(q);
+        Collections.reverse(msgs);
+        return msgs;
+    }
+
+    public List<Message> getGroupMessages(Long groupId, Long beforeId, int limit) {
+        // 限制 limit 范围
+        int safeLimit = Math.min(Math.max(1, limit), 100);
+
+        // 查找该群所有成员的会话
+        List<Conversation> convs = conversationMapper.selectList(
+                new LambdaQueryWrapper<Conversation>()
+                        .eq(Conversation::getType, "GROUP")
+                        .eq(Conversation::getTypeId, groupId)
+        );
+        if (convs.isEmpty()) return Collections.emptyList();
+
+        // 收集所有 conversationId
+        List<Long> convIds = convs.stream().map(Conversation::getId).toList();
+
+        LambdaQueryWrapper<Message> q = new LambdaQueryWrapper<Message>()
+                .in(Message::getConversationId, convIds)
+                .eq(Message::getRecall, 0)
+                .orderByDesc(Message::getId)
+                .last("LIMIT " + safeLimit);
+
+        if (beforeId != null) {
+            q.lt(Message::getId, beforeId);
+        }
+
+        List<Message> msgs = messageMapper.selectList(q);
+        Collections.reverse(msgs);
+        return msgs;
+    }
+
+    public List<Message> getMessagesBetweenUsers(Long conversationId1, Long conversationId2, Long beforeId, int limit) {
+        // 限制 limit 范围
+        int safeLimit = Math.min(Math.max(1, limit), 100);
+
+        LambdaQueryWrapper<Message> q = new LambdaQueryWrapper<Message>()
+                .in(Message::getConversationId, List.of(conversationId1, conversationId2))
+                .eq(Message::getRecall, 0)
+                .orderByDesc(Message::getId)
+                .last("LIMIT " + safeLimit);
+
+        if (beforeId != null) {
+            q.lt(Message::getId, beforeId);
+        }
+
+        List<Message> msgs = messageMapper.selectList(q);
+        Collections.reverse(msgs);
+        return msgs;
+    }
+
+    /**
+     * 批量查询消息并填充发送者信息
+     */
+    public Map<Long, User> getSenderInfoForMessages(List<Message> messages) {
+        if (messages == null || messages.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        Set<Long> senderIds = messages.stream()
+                .map(Message::getSenderId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        if (senderIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+
+        List<User> users = userService.listByIds(senderIds);
+        return users.stream().collect(Collectors.toMap(User::getId, u -> u));
+    }
         q.last("LIMIT " + limit);
         List<Message> msgs = messageMapper.selectList(q);
         Collections.reverse(msgs);
@@ -167,45 +249,15 @@ public class MessageService {
     }
 
     public Map<String, Object> getConversationReadStatus(Long conversationId, Long userId) {
-        MessageRead read = messageReadMapper.selectOne(
-                new LambdaQueryWrapper<MessageRead>()
-                        .eq(MessageRead::getUserId, userId)
-                        .eq(MessageRead::getConversationId, conversationId)
-        );
+        Long lastReadId = readStatusService.getLastReadId(userId, conversationId);
         Map<String, Object> result = new HashMap<>();
-        result.put("lastReadId", read != null ? read.getLastReadId() : 0);
-        result.put("lastReadTime", read != null ? read.getUpdateTime() : null);
+        result.put("lastReadId", lastReadId);
         return result;
     }
 
     public void markAsRead(Long userId, Long conversationId, Long messageId) {
-        MessageRead read = messageReadMapper.selectOne(
-                new LambdaQueryWrapper<MessageRead>()
-                        .eq(MessageRead::getUserId, userId)
-                        .eq(MessageRead::getConversationId, conversationId)
-        );
-        if (read == null) {
-            read = new MessageRead();
-            read.setUserId(userId);
-            read.setConversationId(conversationId);
-            read.setLastReadId(messageId);
-            messageReadMapper.insert(read);
-        } else {
-            read.setLastReadId(messageId);
-            messageReadMapper.updateById(read);
-        }
-        // 通知消息发送者已读
-        Message msg = messageMapper.selectById(messageId);
-        if (msg != null) {
-            Map<String, Object> pushData = new HashMap<>();
-            pushData.put("type", "message_read");
-            pushData.put("data", Map.of(
-                    "messageId", messageId,
-                    "conversationId", conversationId,
-                    "readBy", userId
-            ));
-            wsHandler.sendToUser(msg.getSenderId(), JSONUtil.toJsonStr(pushData));
-        }
+        readStatusService.markAsReadAsync(userId, conversationId, messageId);
+        eventPublisher.publishEvent(new MessageReadEvent(this, userId, conversationId, messageId, userId));
     }
 
     public void recallMessage(Long userId, Long messageId) {
@@ -217,27 +269,11 @@ public class MessageService {
         msg.setStatus("RECALLED");
         messageMapper.updateById(msg);
 
-        // 通知会话中的其他成员
+        // 发布撤回事件
         Conversation conv = conversationMapper.selectById(msg.getConversationId());
         if (conv != null) {
-            String pushJson = JSONUtil.toJsonStr(Map.of(
-                    "type", "message_recalled",
-                    "data", Map.of("messageId", messageId, "conversationId", msg.getConversationId())
-            ));
-            if ("SINGLE".equals(conv.getType())) {
-                if (!conv.getTypeId().equals(userId)) wsHandler.sendToUser(conv.getTypeId(), pushJson);
-            } else if ("GROUP".equals(conv.getType())) {
-                List<GroupMember> members = groupMemberMapper.selectList(
-                        new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getGroupId, conv.getTypeId())
-                );
-                for (GroupMember m : members) {
-                    if (!m.getUserId().equals(userId)) {
-                        wsHandler.sendToUser(m.getUserId(), pushJson);
-                    }
-                }
-            }
+            eventPublisher.publishEvent(new MessageRecalledEvent(this, userId, messageId, conv));
         }
-        wsHandler.sendToUser(userId, JSONUtil.toJsonStr(Map.of("type", "message_recalled", "data", messageId)));
     }
 
     // 从消息内容中提取预览文本（支持图文混合内容的预览）

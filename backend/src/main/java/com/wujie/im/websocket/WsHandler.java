@@ -4,18 +4,24 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.wujie.im.common.JwtUtil;
 import com.wujie.im.entity.Conversation;
+import com.wujie.im.entity.Message;
+import com.wujie.im.event.MessageRecalledEvent;
+import com.wujie.im.event.MessageReadEvent;
+import com.wujie.im.event.MessageSentEvent;
 import com.wujie.im.service.ConversationService;
 import com.wujie.im.service.GroupService;
-import com.wujie.im.service.MessageService;
+import com.wujie.im.service.OnlineUserService;
 import com.wujie.im.service.UserService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
@@ -23,10 +29,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public class WsHandler implements WebSocketHandler {
     private final Map<Long, WebSocketSession> onlineUsers = new ConcurrentHashMap<>();
 
+    @Value("${spring.application.name:im-server}")
+    private String serverId;
+
     @Autowired
     private JwtUtil jwtUtil;
-    @Autowired
-    private MessageService messageService;
     @Autowired
     private ConversationService conversationService;
     @Autowired
@@ -35,19 +42,23 @@ public class WsHandler implements WebSocketHandler {
     private UserService userService;
     @Autowired
     private WsCryptoService wsCryptoService;
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+    @Autowired
+    private OnlineUserService onlineUserService;
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        log.info("WebSocket连接建立: sessionId={}", session.getId());
+        log.debug("WebSocket连接建立: sessionId={}", session.getId());
     }
 
     @Override
     public void handleMessage(WebSocketSession session, WebSocketMessage<?> message) throws Exception {
         String payload = message.getPayload().toString();
-        log.info("WS收到原始消息 sessionId={}: {}", session.getId(), payload);
+        log.debug("WS收到消息 sessionId={}: {}", session.getId(), payload);
         JSONObject json = JSONUtil.parseObj(payload);
         String type = json.getStr("type");
-        log.info("WS消息类型: {}, sessionId={}, onlineUsers={}", type, session.getId(), onlineUsers.keySet());
+        log.debug("WS消息类型: {}, sessionId={}", type, session.getId());
 
         switch (type) {
             case "auth":
@@ -71,10 +82,8 @@ public class WsHandler implements WebSocketHandler {
     }
 
     private void handleAuth(WebSocketSession session, JSONObject json) {
-        String payload = json.toString();
         String token = json.getStr("token");
-        log.info("WebSocket原始消息: {}", payload);
-        log.info("WebSocket提取的token: {}", token);
+        log.debug("WebSocket认证 token长度={}", token != null ? token.length() : 0);
         if (token == null || token.isBlank()) {
             log.error("WebSocket认证失败: token为空或null");
             try {
@@ -96,11 +105,11 @@ public class WsHandler implements WebSocketHandler {
                 return;
             }
             Long userId = jwtUtil.getUserId(token);
-            log.info("WebSocket认证成功: userId={}, userIdType={}, sessionId={}, onlineUsers.size={}, onlineUsers={}", userId, userId != null ? userId.getClass().getName() : "null", session.getId(), onlineUsers.size(), onlineUsers.keySet());
+            log.debug("WebSocket认证成功: userId={}, sessionId={}", userId, session.getId());
             onlineUsers.put(userId, session);
             session.getAttributes().put("userId", userId);
+            onlineUserService.setOnline(userId, serverId);
             userService.updateStatus(userId, "ONLINE");
-            log.info("WebSocket认证后 onlineUsers: {}", onlineUsers.keySet());
             session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":200,\"msg\":\"认证成功\"}}"));
         } catch (io.jsonwebtoken.security.SignatureException e) {
             log.error("WebSocket认证失败: 签名错误 - {}", e.getMessage());
@@ -115,9 +124,6 @@ public class WsHandler implements WebSocketHandler {
     }
 
     private void handleSendMessage(JSONObject json) {
-        // 支持两种格式：
-        // 1. 新格式（加密）: { type: "send_message", data: AES({senderId, conversationId, content, contentType, meta, replyId}) }
-        // 2. 旧格式（明文）: { type: "send_message", senderId, conversationId, content, ... }
         Long senderId;
         Long conversationId;
         String content;
@@ -125,7 +131,6 @@ public class WsHandler implements WebSocketHandler {
         String metaStr;
 
         if (json.containsKey("data")) {
-            // 新格式：解密 data 字段
             String encryptedData = json.getStr("data");
             String decryptedJson = wsCryptoService.decryptData(encryptedData);
             if (decryptedJson == null) {
@@ -139,7 +144,6 @@ public class WsHandler implements WebSocketHandler {
             contentType = dataObj.getStr("contentType", "TEXT");
             metaStr = dataObj.getStr("meta");
         } else {
-            // 旧格式：直接读取字段
             senderId = json.getLong("senderId");
             conversationId = json.getLong("conversationId");
             content = json.getStr("content");
@@ -147,24 +151,34 @@ public class WsHandler implements WebSocketHandler {
             metaStr = json.getStr("meta");
         }
 
-        log.info("handleSendMessage: senderId={}, conversationId={}, content={}", senderId, conversationId, content);
+        log.debug("handleSendMessage: senderId={}, conversationId={}", senderId, conversationId);
 
-        // 保存消息（meta中可能包含atAll字段），推送由MessageService内部处理
-        messageService.sendMessage(senderId, conversationId, content, contentType, metaStr);
-        log.info("handleSendMessage: saved senderId={}, conversationId={}", senderId, conversationId);
+        Conversation conv = conversationService.getOrCreateSingleConversation(senderId, conversationId);
+        Message msg = new Message();
+        msg.setConversationId(conversationId);
+        msg.setSenderId(senderId);
+        msg.setContent(content);
+        msg.setContentType(contentType);
+        msg.setMeta(metaStr);
+        msg.setStatus("SENT");
+
+        eventPublisher.publishEvent(new MessageSentEvent(this, msg, conv, senderId));
     }
 
     private void handleReadMessage(JSONObject json) {
         Long userId = json.getLong("userId");
         Long conversationId = json.getLong("conversationId");
         Long messageId = json.getLong("messageId");
-        messageService.markAsRead(userId, conversationId, messageId);
+        eventPublisher.publishEvent(new MessageReadEvent(this, userId, conversationId, messageId, userId));
     }
 
     private void handleRecallMessage(JSONObject json) {
         Long userId = json.getLong("userId");
         Long messageId = json.getLong("messageId");
-        messageService.recallMessage(userId, messageId);
+        Conversation conv = conversationService.getConversationByTypeId(userId);
+        if (conv != null) {
+            eventPublisher.publishEvent(new MessageRecalledEvent(this, userId, messageId, conv));
+        }
     }
 
     @Override
@@ -173,9 +187,9 @@ public class WsHandler implements WebSocketHandler {
         Long userId = (Long) session.getAttributes().get("userId");
         if (userId != null) {
             WebSocketSession currentSession = onlineUsers.get(userId);
-            // 只有当前session关闭时才更新状态，新session已连接则不更新
             if (session.equals(currentSession)) {
                 onlineUsers.remove(userId);
+                onlineUserService.setOffline(userId);
                 userService.updateStatus(userId, "OFFLINE");
             }
         }
@@ -183,17 +197,16 @@ public class WsHandler implements WebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus closeStatus) throws Exception {
-        log.info("WebSocket连接关闭: sessionId={}, status={}, onlineUsers.size={}", session.getId(), closeStatus, onlineUsers.size());
+        log.debug("WebSocket连接关闭: sessionId={}, status={}", session.getId(), closeStatus);
         Long userId = (Long) session.getAttributes().get("userId");
         if (userId != null) {
             WebSocketSession currentSession = onlineUsers.get(userId);
-            // 只有当前session关闭时才更新状态，新session已连接则不更新
             if (session.equals(currentSession)) {
                 onlineUsers.remove(userId);
+                onlineUserService.setOffline(userId);
                 userService.updateStatus(userId, "OFFLINE");
             }
         }
-        log.info("WebSocket连接关闭后 onlineUsers: {}", onlineUsers);
     }
 
     @Override
@@ -203,26 +216,21 @@ public class WsHandler implements WebSocketHandler {
 
     public void sendToUser(Long userId, String message) {
         WebSocketSession session = onlineUsers.get(userId);
-        log.info("sendToUser: userId={}, session={}, isOpen={}", userId, session != null, session != null && session.isOpen());
         if (session != null && session.isOpen()) {
             try {
                 session.sendMessage(new TextMessage(message));
-                log.info("sendToUser: SUCCESS sent to userId={}", userId);
+                log.debug("sendToUser: SUCCESS sent to userId={}", userId);
             } catch (IOException e) {
                 log.error("发送WebSocket消息失败: userId={}", userId, e);
             }
         } else {
-            log.warn("sendToUser: user not online or session null, userId={}", userId);
+            log.debug("sendToUser: user not online or session null, userId={}", userId);
         }
     }
 
-    /**
-     * 发送加密消息：只对 type=message 的 data 字段加密
-     */
     public void sendToUser(Long userId, String type, Object data) {
         String message;
         if ("message".equals(type) && data != null) {
-            // 只对 type=message 的 data 加密
             String encryptedData = wsCryptoService.encryptData(data);
             if (encryptedData == null) {
                 log.error("[WS] 加密 message data 失败，不发送");
@@ -236,7 +244,6 @@ public class WsHandler implements WebSocketHandler {
     }
 
     public boolean isOnline(Long userId) {
-        WebSocketSession session = onlineUsers.get(userId);
-        return session != null && session.isOpen();
+        return onlineUserService.isOnline(userId);
     }
 }
