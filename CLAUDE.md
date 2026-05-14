@@ -23,7 +23,7 @@ cd backend
 export JAVA_HOME=/home/phy/.jdks/corretto-17.0.18  # Required: Java 17+ for Spring Boot 3.2 Maven plugin
 mvn clean package    # Build JAR
 mvn spring-boot:run  # Run directly
-# Requires: MySQL (mysql.pnkx.top:13306), Redis (127.0.0.1:6379)
+# Requires: MySQL (127.0.0.1:3306), Redis (127.0.0.1:6379)
 ```
 
 ## Architecture

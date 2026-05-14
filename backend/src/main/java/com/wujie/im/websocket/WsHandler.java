@@ -20,6 +20,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -111,6 +112,8 @@ public class WsHandler implements WebSocketHandler {
             onlineUserService.setOnline(userId, serverId);
             userService.updateStatus(userId, "ONLINE");
             session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":200,\"msg\":\"认证成功\"}}"));
+            // 认证成功后，发送未读会话同步消息
+            syncUnreadConversations(userId);
         } catch (io.jsonwebtoken.security.SignatureException e) {
             log.error("WebSocket认证失败: 签名错误 - {}", e.getMessage());
             try { session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":401,\"msg\":\"签名错误\"}}")); } catch (IOException ex) { throw new RuntimeException(ex); }
@@ -245,5 +248,21 @@ public class WsHandler implements WebSocketHandler {
 
     public boolean isOnline(Long userId) {
         return onlineUserService.isOnline(userId);
+    }
+
+    /**
+     * 同步用户的未读会话列表（用户上线时主动推送）
+     */
+    private void syncUnreadConversations(Long userId) {
+        List<Conversation> unreadConvs = conversationService.getConversations(userId).stream()
+                .filter(c -> c.getUnreadCount() != null && c.getUnreadCount() > 0)
+                .toList();
+        if (!unreadConvs.isEmpty()) {
+            String syncMessage = cn.hutool.json.JSONUtil.toJsonStr(
+                    java.util.Map.of("type", "unread_sync", "data", unreadConvs)
+            );
+            sendToUser(userId, syncMessage);
+            log.info("syncUnreadConversations: 已推送 {} 个未读会话给用户 {}", unreadConvs.size(), userId);
+        }
     }
 }

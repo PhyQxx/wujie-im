@@ -17,6 +17,7 @@ public class ConversationService {
     @Autowired
     private ConversationMapper conversationMapper;
     @Autowired
+    @org.springframework.context.annotation.Lazy
     private WsHandler wsHandler;
 
     public Conversation getConversationByTypeId(Long typeId) {
@@ -61,6 +62,10 @@ public class ConversationService {
         conv.setUnreadCount(0);
         conversationMapper.insert(conv);
         return conv;
+    }
+
+    public Conversation getConversationById(Long id) {
+        return conversationMapper.selectById(id);
     }
 
     public void updateLastMessage(Long conversationId, Long messageId, String content) {

@@ -1,5 +1,5 @@
 server:
-  port: 19082
+  port: ${SERVER_PORT:19082}
 
 spring:
   application:
@@ -10,20 +10,20 @@ spring:
       max-request-size: 50MB
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://127.0.0.1:3306/wujie_im?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
-    username: root
-    password: 123456
+    url: ${MYSQL_URL:jdbc:mysql://127.0.0.1:3306/wujie_im?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false}
+    username: ${MYSQL_USERNAME:root}
+    password: ${MYSQL_PASSWORD:}
   data:
     redis:
-      host: 127.0.0.1
-      port: 6379
-      database: 0
-      timeout: 5000
+      host: ${REDIS_HOST:127.0.0.1}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DATABASE:0}
+      timeout: ${REDIS_TIMEOUT:5000}
       lettuce:
         pool:
-          max-active: 8
-          max-idle: 8
-          min-idle: 0
+          max-active: ${REDIS_POOL_MAX_ACTIVE:8}
+          max-idle: ${REDIS_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_POOL_MIN_IDLE:0}
 
 mybatis-plus:
   mapper-locations: classpath:mapper/*.xml
@@ -39,16 +39,16 @@ mybatis-plus:
       logic-not-delete-value: 0
 
 jwt:
-  secret: wujie-im-secret-key-change-in-production-2024
-  access-token-validity: 900000
-  refresh-token-validity: 604800000
+  secret: ${JWT_SECRET:}
+  access-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:900000}
+  refresh-token-validity: ${JWT_REFRESH_TOKEN_VALIDITY:604800000}
 
 wujie:
   im:
     websocket:
-      heartbeat-interval: 30000
+      heartbeat-interval: ${WS_HEARTBEAT_INTERVAL:30000}
     crypto:
-      aes-key: wujie-im-aes-256-key-2024-change-in-production
+      aes-key: ${AES_KEY:}
     minio:
       endpoint: http://127.0.0.1:9010
       access-key: minioadmin
@@ -56,21 +56,16 @@ wujie:
       bucket: wujie-im
     ai:
       minimax:
-        api-url: https://api.minimax.chat/v1/text/chatcompletion_v2
+        api-url: ${MINIMAX_API_URL:https://api.minimax.chat/v1/text/chatcompletion_v2}
       glm:
-        api-url: https://open.bigmodel.cn/api/paas/v4/chat/completions
+        api-url: ${GLM_API_URL:https://open.bigmodel.cn/api/paas/v4/chat/completions}
       deepseek:
-        api-url: https://api.deepseek.com/v1/chat/completions
+        api-url: ${DEEPSEEK_API_URL:https://api.deepseek.com/v1/chat/completions}
 
 ftp:
-  # ftp地址
-  host: 127.0.0.1
-  # ftp端口
-  port: 21
-  # ftp用户名
-  username: admin
-  # ftp密码
-  password: phy0316.
-  # ftp上传路径
-  path: /ftp/
-  url-prefix: https://ftp.pnkx.top:8/ftp
+  host: ${FTP_HOST:}
+  port: ${FTP_PORT:21}
+  username: ${FTP_USERNAME:}
+  password: ${FTP_PASSWORD:}
+  path: ${FTP_PATH:/ftp/}
+  url-prefix: ${FTP_URL_PREFIX:}
