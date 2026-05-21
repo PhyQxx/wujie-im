@@ -24,7 +24,8 @@ export const useMessageStore = defineStore('message', () => {
         if (!exists) {
           messages.value.push(msg)
           if (isCurrentConv) {
-            // 当前会话消息，滚动到底部
+            // 当前会话消息，自动标记已读
+            markAsRead(msg.conversationId, msg.id)
             nextTick(() => {
               const el = document.querySelector('.messages')
               if (el) el.scrollTop = el.scrollHeight

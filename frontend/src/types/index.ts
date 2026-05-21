@@ -78,6 +78,7 @@ export interface Robot {
   description?: string
   type: 'AI' | 'CUSTOM'
   ownerId: number
+  ownerName?: string
   status: 'ACTIVE' | 'INACTIVE'
   responseMode: string
   contextSize: number
@@ -86,10 +87,11 @@ export interface Robot {
 
 export interface AiConfig {
   id: number
-  robotId: number
+  name?: string
   provider: 'MINIMAX' | 'GLM' | 'DEEPSEEK'
   model: string
   apiKey: string
+  apiUrl?: string
   systemPrompt?: string
   temperature: number
   maxTokens: number

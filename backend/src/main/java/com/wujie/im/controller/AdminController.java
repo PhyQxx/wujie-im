@@ -154,7 +154,59 @@ public class AdminController {
         if (keyword != null && !keyword.isBlank()) {
             q.like(Robot::getName, keyword);
         }
-        return Result.success(robotMapper.selectList(q));
+        List<Robot> robots = robotMapper.selectList(q);
+        for (Robot r : robots) {
+            if (r.getOwnerId() != null) {
+                User owner = userMapper.selectById(r.getOwnerId());
+                if (owner != null) {
+                    r.setOwnerName(owner.getUsername());
+                }
+            }
+        }
+        return Result.success(robots);
+    }
+
+    @PostMapping("/robot/{robotId}/join-group/{groupId}")
+    public Result<Void> robotJoinGroup(@PathVariable Long robotId, @PathVariable Long groupId) {
+        Robot robot = robotMapper.selectById(robotId);
+        if (robot == null || robot.getVirtualUserId() == null) return Result.error("机器人不存在");
+        GroupMember existing = groupMemberMapper.selectOne(
+                new LambdaQueryWrapper<GroupMember>()
+                        .eq(GroupMember::getGroupId, groupId)
+                        .eq(GroupMember::getUserId, robot.getVirtualUserId())
+        );
+        if (existing != null) return Result.error("机器人已在该群中");
+        GroupMember member = new GroupMember();
+        member.setGroupId(groupId);
+        member.setUserId(robot.getVirtualUserId());
+        member.setRole("MEMBER");
+        member.setMuted(0);
+        groupMemberMapper.insert(member);
+        return Result.success();
+    }
+
+    @DeleteMapping("/robot/{robotId}/leave-group/{groupId}")
+    public Result<Void> robotLeaveGroup(@PathVariable Long robotId, @PathVariable Long groupId) {
+        Robot robot = robotMapper.selectById(robotId);
+        if (robot == null || robot.getVirtualUserId() == null) return Result.error("机器人不存在");
+        groupMemberMapper.delete(
+                new LambdaQueryWrapper<GroupMember>()
+                        .eq(GroupMember::getGroupId, groupId)
+                        .eq(GroupMember::getUserId, robot.getVirtualUserId())
+        );
+        return Result.success();
+    }
+
+    @GetMapping("/robot/{robotId}/groups")
+    public Result<List<GroupInfo>> robotGroups(@PathVariable Long robotId) {
+        Robot robot = robotMapper.selectById(robotId);
+        if (robot == null || robot.getVirtualUserId() == null) return Result.success(List.of());
+        List<GroupMember> memberships = groupMemberMapper.selectList(
+                new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getUserId, robot.getVirtualUserId())
+        );
+        if (memberships.isEmpty()) return Result.success(List.of());
+        List<Long> groupIds = memberships.stream().map(GroupMember::getGroupId).toList();
+        return Result.success(groupInfoMapper.selectBatchIds(groupIds));
     }
 
     // ==================== 敏感词管理 ====================
@@ -177,10 +229,8 @@ public class AdminController {
 
     // ==================== AI配置管理 ====================
     @GetMapping("/ai-config")
-    public Result<List<AiConfig>> listAiConfigs(@RequestParam(required = false) Long robotId) {
-        LambdaQueryWrapper<AiConfig> q = new LambdaQueryWrapper<>();
-        if (robotId != null) q.eq(AiConfig::getRobotId, robotId);
-        return Result.success(aiConfigMapper.selectList(q));
+    public Result<List<AiConfig>> listAiConfigs() {
+        return Result.success(aiConfigMapper.selectList(new LambdaQueryWrapper<>()));
     }
 
     @PostMapping("/ai-config")

@@ -25,6 +25,8 @@ public class RobotService {
     private RobotRuleMapper robotRuleMapper;
     @Autowired
     private AiConfigMapper aiConfigMapper;
+    @Autowired
+    private UserMapper userMapper;
 
     public Robot createRobot(String name, String avatar, String type, Long ownerId) {
         Robot robot = new Robot();
@@ -35,6 +37,17 @@ public class RobotService {
         robot.setStatus("ACTIVE");
         robot.setResponseMode("MENTION");
         robot.setContextSize(20);
+
+        // 创建虚拟用户
+        User virtualUser = new User();
+        virtualUser.setUsername("robot_" + System.currentTimeMillis());
+        virtualUser.setPassword(UUID.randomUUID().toString());
+        virtualUser.setRole("ROBOT");
+        virtualUser.setStatus(1);
+        virtualUser.setUserStatus("ONLINE");
+        userMapper.insert(virtualUser);
+
+        robot.setVirtualUserId(virtualUser.getId());
         robotMapper.insert(robot);
         return robot;
     }
@@ -46,14 +59,23 @@ public class RobotService {
             if (params.containsKey("name")) robot.setName((String) params.get("name"));
             if (params.containsKey("avatar")) robot.setAvatar((String) params.get("avatar"));
             if (params.containsKey("description")) robot.setDescription((String) params.get("description"));
+            if (params.containsKey("aiConfigId")) {
+                Object val = params.get("aiConfigId");
+                robot.setAiConfigId(val != null ? Long.valueOf(val.toString()) : null);
+            }
+            if (params.containsKey("responseMode")) robot.setResponseMode((String) params.get("responseMode"));
+            if (params.containsKey("contextSize")) robot.setContextSize(Integer.valueOf(params.get("contextSize").toString()));
             robotMapper.updateById(robot);
         }
     }
 
     public void deleteRobot(Long robotId) {
+        Robot robot = robotMapper.selectById(robotId);
+        if (robot != null && robot.getVirtualUserId() != null) {
+            userMapper.deleteById(robot.getVirtualUserId());
+        }
         robotMapper.deleteById(robotId);
         robotRuleMapper.delete(new LambdaQueryWrapper<RobotRule>().eq(RobotRule::getRobotId, robotId));
-        aiConfigMapper.delete(new LambdaQueryWrapper<AiConfig>().eq(AiConfig::getRobotId, robotId));
     }
 
     public List<Robot> listRobots(Long ownerId) {
@@ -61,22 +83,28 @@ public class RobotService {
         return robotMapper.selectList(q);
     }
 
-    public AiConfig getAiConfig(Long robotId) {
-        return aiConfigMapper.selectOne(
-                new LambdaQueryWrapper<AiConfig>().eq(AiConfig::getRobotId, robotId)
-        );
+    public List<Robot> listAllRobots(String keyword) {
+        LambdaQueryWrapper<Robot> q = new LambdaQueryWrapper<>();
+        if (keyword != null && !keyword.isBlank()) {
+            q.like(Robot::getName, keyword);
+        }
+        return robotMapper.selectList(q);
     }
 
-    public void saveAiConfig(AiConfig config) {
-        AiConfig exist = aiConfigMapper.selectOne(
-                new LambdaQueryWrapper<AiConfig>().eq(AiConfig::getRobotId, config.getRobotId())
+    public Robot getRobotById(Long robotId) {
+        return robotMapper.selectById(robotId);
+    }
+
+    public AiConfig getAiConfig(Long robotId) {
+        Robot robot = robotMapper.selectById(robotId);
+        if (robot == null || robot.getAiConfigId() == null) return null;
+        return aiConfigMapper.selectById(robot.getAiConfigId());
+    }
+
+    public Robot getRobotByVirtualUserId(Long virtualUserId) {
+        return robotMapper.selectOne(
+                new LambdaQueryWrapper<Robot>().eq(Robot::getVirtualUserId, virtualUserId)
         );
-        if (exist != null) {
-            config.setId(exist.getId());
-            aiConfigMapper.updateById(config);
-        } else {
-            aiConfigMapper.insert(config);
-        }
     }
 
     public List<RobotRule> getRules(Long robotId) {

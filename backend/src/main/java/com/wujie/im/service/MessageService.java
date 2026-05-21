@@ -28,6 +28,11 @@ public class MessageService {
     @Autowired
     @org.springframework.context.annotation.Lazy
     private ConversationService conversationService;
+    @Autowired
+    private UserMapper userMapper;
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private RobotMessageHandler robotMessageHandler;
 
     public Message sendMessage(Long senderId, Long conversationId, String content, String contentType) {
         return sendMessage(senderId, conversationId, content, contentType, null, null);
@@ -112,6 +117,12 @@ public class MessageService {
                 pushMsg.setCreateTime(msg.getCreateTime());
                 pushMsg.setRecall(msg.getRecall());
                 wsHandler.sendToUser(otherUserId, "message", pushMsg);
+
+                // 检测接收者是否为机器人虚拟用户
+                User otherUser = userMapper.selectById(otherUserId);
+                if (otherUser != null && "ROBOT".equals(otherUser.getRole())) {
+                    robotMessageHandler.handlePrivateChat(otherUserId, excludeUserId, msg.getContent());
+                }
             }
             wsHandler.sendToUser(excludeUserId, "message", msg);
         } else if ("GROUP".equals(conv.getType())) {
@@ -139,6 +150,26 @@ public class MessageService {
                     wsHandler.sendToUser(m.getUserId(), "message", pushMsg);
                 } else {
                     wsHandler.sendToUser(excludeUserId, "message", pushMsg);
+                }
+            }
+
+            // 检测群成员中是否有机器人，触发自动回复
+            for (GroupMember m : members) {
+                if (m.getUserId().equals(excludeUserId)) continue;
+                User memberUser = userMapper.selectById(m.getUserId());
+                if (memberUser != null && "ROBOT".equals(memberUser.getRole())) {
+                    // 检测是否@了机器人（通过meta中的mentionedUserIds）
+                    boolean isMentioned = false;
+                    if (msg.getMeta() != null) {
+                        try {
+                            cn.hutool.json.JSONObject metaJson = cn.hutool.json.JSONUtil.parseObj(msg.getMeta());
+                            cn.hutool.json.JSONArray mentioned = metaJson.getJSONArray("mentionedUserIds");
+                            if (mentioned != null && mentioned.contains(m.getUserId())) {
+                                isMentioned = true;
+                            }
+                        } catch (Exception ignored) {}
+                    }
+                    robotMessageHandler.handleGroupChat(m.getUserId(), conv.getTypeId(), excludeUserId, msg.getContent(), isMentioned);
                 }
             }
         }
@@ -233,6 +264,16 @@ public class MessageService {
         } else {
             read.setLastReadId(messageId);
             messageReadMapper.updateById(read);
+        }
+        // 清零 conversation 表的 unread_count
+        Conversation conv = conversationMapper.selectOne(
+                new LambdaQueryWrapper<Conversation>()
+                        .eq(Conversation::getId, conversationId)
+                        .eq(Conversation::getUserId, userId)
+        );
+        if (conv != null && conv.getUnreadCount() != null && conv.getUnreadCount() > 0) {
+            conv.setUnreadCount(0);
+            conversationMapper.updateById(conv);
         }
         // 通知消息发送者已读
         Message msg = messageMapper.selectById(messageId);

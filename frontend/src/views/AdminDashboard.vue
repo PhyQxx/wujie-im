@@ -205,7 +205,13 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column prop="ownerId" label="创建者ID" />
+        <el-table-column prop="ownerName" label="创建人" />
+        <el-table-column label="操作" width="160">
+          <template #default="{ row }">
+            <el-button size="small" @click="editRobot(row)">编辑</el-button>
+            <el-button size="small" type="danger" @click="deleteRobot(row)">删除</el-button>
+          </template>
+        </el-table-column>
       </el-table>
 
       <el-dialog v-model="showCreateRobotDialog" title="新增机器人" width="420px">
@@ -226,6 +232,42 @@
           <el-button type="primary" @click="createRobot">创建</el-button>
         </template>
       </el-dialog>
+
+      <el-dialog v-model="showEditRobotDialog" title="编辑机器人" width="480px">
+        <el-form :model="editRobotForm" label-width="90px">
+          <el-form-item label="名称">
+            <el-input v-model="editRobotForm.name" />
+          </el-form-item>
+          <el-form-item label="描述">
+            <el-input v-model="editRobotForm.description" type="textarea" :rows="2" />
+          </el-form-item>
+          <el-form-item label="状态">
+            <el-select v-model="editRobotForm.status" style="width:100%">
+              <el-option label="启用" value="ACTIVE" />
+              <el-option label="停用" value="INACTIVE" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="响应模式">
+            <el-select v-model="editRobotForm.responseMode" style="width:100%">
+              <el-option label="仅@回复" value="MENTION" />
+              <el-option label="所有消息" value="ALL" />
+              <el-option label="延迟回复" value="DELAYED" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="上下文长度">
+            <el-input-number v-model="editRobotForm.contextSize" :min="1" :max="100" />
+          </el-form-item>
+          <el-form-item label="AI配置">
+            <el-select v-model="editRobotForm.aiConfigId" clearable placeholder="选择AI配置" style="width:100%">
+              <el-option v-for="cfg in aiConfigs" :key="cfg.id" :label="cfg.name || cfg.provider + ' - ' + cfg.model" :value="cfg.id" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="showEditRobotDialog = false">取消</el-button>
+          <el-button type="primary" @click="saveEditRobot">保存</el-button>
+        </template>
+      </el-dialog>
     </div>
 
     <!-- AI配置 -->
@@ -236,7 +278,6 @@
       </div>
       <el-table :data="aiConfigs" stripe v-loading="loading">
         <el-table-column prop="id" label="ID" width="60" />
-        <el-table-column prop="robotId" label="机器人ID" width="100" />
         <el-table-column prop="provider" label="提供商" width="120">
           <template #default="{ row }">
             <el-tag size="small">{{ row.provider }}</el-tag>
@@ -255,8 +296,8 @@
 
       <el-dialog v-model="showAiDialog" title="AI配置" width="480px">
         <el-form :model="aiForm" label-width="90px">
-          <el-form-item label="机器人ID">
-            <el-input v-model.number="aiForm.robotId" type="number" />
+          <el-form-item label="配置名称">
+            <el-input v-model="aiForm.name" placeholder="如：通用客服模型" />
           </el-form-item>
           <el-form-item label="提供商">
             <el-select v-model="aiForm.provider" style="width:100%">
@@ -270,6 +311,9 @@
           </el-form-item>
           <el-form-item label="API Key">
             <el-input v-model="aiForm.apiKey" type="password" show-password />
+          </el-form-item>
+          <el-form-item label="自定义URL">
+            <el-input v-model="aiForm.apiUrl" placeholder="留空使用默认地址" />
           </el-form-item>
           <el-form-item label="系统提示词">
             <el-input v-model="aiForm.systemPrompt" type="textarea" :rows="3" />
@@ -390,6 +434,10 @@ const createGroupForm = ref({ name: '', type: 'PUBLIC' })
 const showCreateRobotDialog = ref(false)
 const createRobotForm = ref({ name: '', type: 'AI' })
 
+// 编辑机器人
+const showEditRobotDialog = ref(false)
+const editRobotForm = ref<any>({})
+
 // 群消息
 const showGroupMessages = ref(false)
 const selectedGroup = ref<any>(null)
@@ -459,6 +507,51 @@ async function createRobot() {
     await loadRobots()
   } catch (_e: any) {
     ElMessage.error(_e?.response?.data?.msg || '创建失败')
+  }
+}
+
+// 编辑机器人
+async function editRobot(row: any) {
+  // 确保 AI 配置列表已加载，供下拉选择
+  if (!aiConfigs.value.length) {
+    try { await loadAiConfigs() } catch {}
+  }
+  editRobotForm.value = {
+    id: row.id,
+    name: row.name,
+    description: row.description || '',
+    status: row.status,
+    responseMode: row.responseMode || 'MENTION',
+    contextSize: row.contextSize || 20,
+    aiConfigId: row.aiConfigId || null
+  }
+  showEditRobotDialog.value = true
+}
+
+async function saveEditRobot() {
+  if (!editRobotForm.value.name?.trim()) {
+    ElMessage.warning('请输入机器人名称')
+    return
+  }
+  try {
+    const { id, ...data } = editRobotForm.value
+    await adminApi.updateRobot(id, data)
+    ElMessage.success('机器人更新成功')
+    showEditRobotDialog.value = false
+    await loadRobots()
+  } catch (_e: any) {
+    ElMessage.error(_e?.response?.data?.msg || '更新失败')
+  }
+}
+
+// 删除机器人
+async function deleteRobot(row: any) {
+  try {
+    await adminApi.deleteRobot(row.id)
+    robots.value = robots.value.filter(r => r.id !== row.id)
+    ElMessage.success('机器人已删除')
+  } catch (_e: any) {
+    ElMessage.error(_e?.response?.data?.msg || '删除失败')
   }
 }
 

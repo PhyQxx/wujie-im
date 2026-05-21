@@ -14,6 +14,8 @@ public class Robot {
     private String description;
     private String type;
     private Long ownerId;
+    private Long aiConfigId;
+    private Long virtualUserId;
     private String status;
     private String responseMode;
     private Integer contextSize;
@@ -24,4 +26,6 @@ public class Robot {
     private LocalDateTime updateTime;
     @TableLogic
     private Integer deleted;
+    @TableField(exist = false)
+    private String ownerName;
 }

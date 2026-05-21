@@ -10,10 +10,11 @@ import java.time.LocalDateTime;
 public class AiConfig {
     @TableId(type = IdType.AUTO)
     private Long id;
-    private Long robotId;
+    private String name;
     private String provider;
     private String model;
     private String apiKey;
+    private String apiUrl;
     private String systemPrompt;
     private BigDecimal temperature;
     private Integer maxTokens;

@@ -27,6 +27,10 @@ export const adminApi = {
     request.get('/admin/robots', { params: { keyword } }),
   createRobot: (data: { name: string; type: string; ownerId: number }) =>
     request.post('/robot/create', data),
+  updateRobot: (robotId: number, data: Record<string, unknown>) =>
+    request.put(`/robot/${robotId}`, data),
+  deleteRobot: (robotId: number) =>
+    request.delete(`/robot/${robotId}`),
 
   // 敏感词
   sensitiveWords: () => request.get('/admin/sensitive-words'),

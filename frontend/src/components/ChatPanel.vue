@@ -167,6 +167,12 @@ watch(currentConversation, (conv) => {
           (messageListRef.value as any).__oldScrollHeight = messageListRef.value.scrollHeight
         }
       })
+      // 标记已读：用当前会话最后一条消息的 ID 通知后端
+      const msgs = messageStore.messages
+      if (msgs.length > 0) {
+        const lastMsg = msgs[msgs.length - 1]
+        messageStore.markAsRead(conv.id, lastMsg.id)
+      }
     })
   }
 }, { immediate: true })

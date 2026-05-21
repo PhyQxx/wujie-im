@@ -21,7 +21,8 @@ public class DeepSeekService {
 
     public String chat(AiConfig config, List<String> history, String userMessage) {
         try {
-            URL url = new URL(apiUrl);
+            String targetUrl = (config.getApiUrl() != null && !config.getApiUrl().isBlank()) ? config.getApiUrl() : apiUrl;
+            URL url = new URL(targetUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
             conn.setRequestProperty("Authorization", "Bearer " + config.getApiKey());

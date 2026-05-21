@@ -54,9 +54,11 @@ public class RobotController {
     }
 
     @PostMapping("/{robotId}/ai-config")
-    public Result<Void> saveAiConfig(@PathVariable Long robotId, @RequestBody AiConfig config) {
-        config.setRobotId(robotId);
-        robotService.saveAiConfig(config);
+    public Result<Void> saveAiConfig(@PathVariable Long robotId, @RequestBody Map<String, Object> params) {
+        Long aiConfigId = params.get("aiConfigId") != null ? Long.valueOf(params.get("aiConfigId").toString()) : null;
+        Map<String, Object> updateParams = new HashMap<>();
+        updateParams.put("aiConfigId", aiConfigId);
+        robotService.updateRobot(robotId, updateParams);
         return Result.success();
     }
 
