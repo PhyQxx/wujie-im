@@ -41,6 +41,23 @@ public class FriendService {
         if (exist != null) {
             throw new RuntimeException("你们已经是好友了");
         }
+
+        // 机器人用户自动同意好友请求
+        User toUser = userMapper.selectById(toUserId);
+        if (toUser != null && "ROBOT".equals(toUser.getRole())) {
+            FriendRelation r1 = new FriendRelation();
+            r1.setUserId(fromUserId);
+            r1.setFriendId(toUserId);
+            r1.setGroupId(1L);
+            friendRelationMapper.insert(r1);
+            FriendRelation r2 = new FriendRelation();
+            r2.setUserId(toUserId);
+            r2.setFriendId(fromUserId);
+            r2.setGroupId(1L);
+            friendRelationMapper.insert(r2);
+            return;
+        }
+
         FriendRequest req = new FriendRequest();
         req.setFromUserId(fromUserId);
         req.setToUserId(toUserId);

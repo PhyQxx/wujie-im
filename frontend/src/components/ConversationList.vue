@@ -16,6 +16,7 @@
       <div class="chat-info">
         <div class="chat-name">
           {{ getName(conv) }}
+          <el-tag v-if="conv.type === 'SINGLE' && conv.targetUser?.role === 'ROBOT'" size="small" type="success" style="margin-left:2px">AI</el-tag>
           <span v-if="conv.unreadCount > 0" class="badge">{{ conv.unreadCount > 99 ? '99+' : conv.unreadCount }}</span>
         </div>
         <div class="chat-preview">{{ conv.lastMessageContent || '暂无消息' }}</div>

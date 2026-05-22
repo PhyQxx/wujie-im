@@ -40,7 +40,7 @@ public class RobotService {
 
         // 创建虚拟用户
         User virtualUser = new User();
-        virtualUser.setUsername("robot_" + System.currentTimeMillis());
+        virtualUser.setUsername("robot_" + name);
         virtualUser.setPassword(UUID.randomUUID().toString());
         virtualUser.setRole("ROBOT");
         virtualUser.setStatus(1);

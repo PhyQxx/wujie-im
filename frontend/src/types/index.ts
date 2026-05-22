@@ -79,6 +79,8 @@ export interface Robot {
   type: 'AI' | 'CUSTOM'
   ownerId: number
   ownerName?: string
+  virtualUserId?: number
+  aiConfigId?: number
   status: 'ACTIVE' | 'INACTIVE'
   responseMode: string
   contextSize: number
