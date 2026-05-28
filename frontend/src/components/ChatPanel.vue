@@ -150,27 +150,29 @@
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
           </button>
         </div>
-        <div class="input-row">
-          <div class="md-editor-wrap" @click="startEditing">
-            <!-- 渲染层：失去焦点时显示 -->
-            <div v-if="!isEditing && inputText" class="md-render-layer" v-html="getRenderedLines()" />
-            
-            <!-- @ 提及列表 -->
+        <div class="input-row" style="position: relative;">
+          <!-- @ 提及列表移至此处以避免被 overflow hidden/auto 裁剪 -->
+          <transition name="fade">
             <div v-if="showMentionList && filteredMembers.length" class="mention-list-popover">
               <div
                 v-for="(m, idx) in filteredMembers"
-                :key="m.userId"
+                :key="m.isAll ? 'all' : m.userId"
                 class="mention-item"
-                :class="{ active: idx === mentionIndex }"
-                @click="insertMention(m)"
+                :class="{ active: idx === mentionIndex, 'all-option': m.isAll }"
+                @mousedown.prevent="insertMention(m)"
               >
-                <div class="mention-avatar" :style="{ background: getAvatarBgFromUser(m.user) }">
-                  {{ m.user?.username?.[0] }}
+                <div class="mention-avatar" :style="{ background: m.isAll ? '#F59E0B' : getAvatarBgFromUser(m.user) }">
+                  {{ m.isAll ? '📢' : m.user?.username?.[0] }}
                 </div>
                 <span class="mention-name">{{ m.user?.username }}</span>
               </div>
             </div>
+          </transition>
 
+          <div class="md-editor-wrap" @click="startEditing">
+            <!-- 渲染层：失去焦点时显示 -->
+            <div v-if="!isEditing && inputText" class="md-render-layer" v-html="getRenderedLines()" />
+            
             <!-- 编辑层：聚焦时显示 -->
             <textarea
               v-if="isEditing"
@@ -182,8 +184,7 @@
               @focus="isEditing = true"
               @blur="onEditorBlur"
               @input="onEditorInput"
-              @keydown="handleMentionKeydown"
-              @keydown.enter.exact.prevent="sendMessage"
+              @keydown="handleKeydown"
             />
             <!-- 默认占位：未编辑且无内容时 -->
             <div v-if="!inputText && !isEditing" class="md-placeholder" style="height: 40px">输入消息，支持 Markdown...</div>
@@ -248,10 +249,24 @@ const mentionIndex = ref(0)
 const atUserIds = ref<number[]>([])
 
 const filteredMembers = computed(() => {
-  if (!mentionSearch.value) return groupStore.members
-  return groupStore.members.filter(m => 
-    m.user?.username?.toLowerCase().includes(mentionSearch.value.toLowerCase())
+  const allOption = {
+    userId: -1, // 特殊ID标识全体
+    user: { username: '全体成员', avatar: '' },
+    isAll: true
+  }
+  
+  const members = groupStore.members
+  if (!mentionSearch.value) return [allOption, ...members]
+  
+  const search = mentionSearch.value.toLowerCase()
+  const filtered = members.filter(m => 
+    m.user?.username?.toLowerCase().includes(search)
   )
+  
+  if ('全体成员'.includes(search)) {
+    return [allOption, ...filtered]
+  }
+  return filtered
 })
 
 const editorHeightStyle = computed(() => {
@@ -316,6 +331,9 @@ function formatTime(time: string) {
 watch(currentConversation, (conv) => {
   if (conv) {
     userHasScrolledUp.value = false // 重置滚动状态
+    if (conv.type === 'GROUP') {
+      groupStore.fetchMembers(conv.typeId)
+    }
     messageStore.fetchMessages(conv.id).then(() => {
       nextTick(() => {
         scrollToBottom()
@@ -566,41 +584,61 @@ function onEditorInput(e: Event) {
   // 2. @ 功能检测
   const target = e.target as HTMLTextAreaElement
   const pos = target.selectionStart
-  const textBefore = inputText.value.substring(0, pos)
+  const currentVal = target.value
+  const textBefore = currentVal.substring(0, pos)
+  
+  console.log('[Mention] Input detected. textBefore:', textBefore, 'pos:', pos)
   
   if (currentConversation.value?.type === 'GROUP') {
     const lastAtIdx = textBefore.lastIndexOf('@')
+    console.log('[Mention] lastAtIdx:', lastAtIdx)
+    
     if (lastAtIdx !== -1) {
       const searchPart = textBefore.substring(lastAtIdx + 1)
-      // 如果@后面没有空格，且长度适中，开启选择
+      console.log('[Mention] searchPart:', searchPart)
+      
+      // 如果@后面没有空格且没有换行，且长度适中，开启选择
       if (!searchPart.includes(' ') && !searchPart.includes('\n') && searchPart.length < 15) {
         showMentionList.value = true
         mentionSearch.value = searchPart
         mentionIndex.value = 0
+        console.log('[Mention] List shown. Search:', searchPart, 'Members count:', filteredMembers.value.length)
       } else {
         showMentionList.value = false
       }
     } else {
       showMentionList.value = false
     }
+  } else {
+    showMentionList.value = false
   }
 }
 
-function handleMentionKeydown(e: KeyboardEvent) {
-  if (!showMentionList.value) return
+function handleKeydown(e: KeyboardEvent) {
+  if (showMentionList.value) {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      mentionIndex.value = (mentionIndex.value - 1 + filteredMembers.value.length) % (filteredMembers.value.length || 1)
+      return
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      mentionIndex.value = (mentionIndex.value + 1) % (filteredMembers.value.length || 1)
+      return
+    } else if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault()
+      const member = filteredMembers.value[mentionIndex.value]
+      if (member) insertMention(member)
+      return
+    } else if (e.key === 'Escape') {
+      showMentionList.value = false
+      return
+    }
+  }
 
-  if (e.key === 'ArrowUp') {
+  // 正常发送消息 (排除 shift, ctrl, alt, meta)
+  if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) {
     e.preventDefault()
-    mentionIndex.value = (mentionIndex.value - 1 + filteredMembers.value.length) % (filteredMembers.value.length || 1)
-  } else if (e.key === 'ArrowDown') {
-    e.preventDefault()
-    mentionIndex.value = (mentionIndex.value + 1) % (filteredMembers.value.length || 1)
-  } else if (e.key === 'Enter' || e.key === 'Tab') {
-    e.preventDefault()
-    const member = filteredMembers.value[mentionIndex.value]
-    if (member) insertMention(member)
-  } else if (e.key === 'Escape') {
-    showMentionList.value = false
+    sendMessage()
   }
 }
 
@@ -613,14 +651,18 @@ function insertMention(member: any) {
   const textAfter = inputText.value.substring(pos)
   
   const lastAtIdx = textBefore.lastIndexOf('@')
-  const newTextBefore = textBefore.substring(0, lastAtIdx) + `@${member.user.username} `
+  const mentionName = member.isAll ? '全体成员' : member.user.username
+  const newTextBefore = textBefore.substring(0, lastAtIdx) + `@${mentionName} `
   
   inputText.value = newTextBefore + textAfter
   showMentionList.value = false
   
-  // 记录选中的用户ID
-  if (!atUserIds.value.includes(member.userId)) {
-    atUserIds.value.push(member.userId)
+  if (member.isAll) {
+    atAllActive.value = true
+  } else {
+    if (!atUserIds.value.includes(member.userId)) {
+      atUserIds.value.push(member.userId)
+    }
   }
 
   nextTick(() => {
@@ -874,7 +916,6 @@ defineExpose({ scrollToBottom, setReplyingTo })
   border-radius: 12px; background: var(--surface-2, #F9FAFB);
   max-height: 200px; overflow-y: auto;
   box-sizing: border-box; display: flex; flex-direction: column;
-  position: relative;
 }
 
 /* @ 提及列表样式 */
@@ -885,6 +926,7 @@ defineExpose({ scrollToBottom, setReplyingTo })
   border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);
   z-index: 1000; padding: 6px;
 }
+
 .mention-item {
   display: flex; align-items: center; gap: 10px; padding: 8px 10px;
   border-radius: 8px; cursor: pointer; transition: background 0.1s;

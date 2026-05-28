@@ -304,13 +304,18 @@ function formatTime(time: string) {
 .message-row.mention .msg-bubble .text-msg {
   background: #FFFBEB !important;
   border: 1px solid #FEF3C7;
+  color: #111827; /* 强制覆盖文字颜色，防止 outgoing 时为白色不可读 */
 }
 .text-msg :deep(.mention-tag) {
-  color: var(--primary);
+  color: var(--primary, #4F46E5);
   font-weight: 600;
   background: rgba(79, 70, 229, 0.1);
   padding: 0 4px;
   border-radius: 4px;
+}
+.message-row.outgoing:not(.mention) .text-msg :deep(.mention-tag) {
+  color: white;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .msg-sender {
