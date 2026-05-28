@@ -63,6 +63,13 @@
               <span class="value">{{ selectedRobot.name }}</span>
             </div>
             <div class="info-item">
+              <span class="label">虚拟账号</span>
+              <span class="value">
+                robot_{{ selectedRobot.name }}
+                <el-link type="primary" :underline="false" style="margin-left: 8px" @click="copyText('robot_' + selectedRobot.name)">复制</el-link>
+              </span>
+            </div>
+            <div class="info-item">
               <span class="label">类型</span>
               <span class="value">{{ selectedRobot.type === 'AI' ? 'AI 机器人' : '自定义机器人' }}</span>
             </div>
@@ -98,7 +105,9 @@
         </div>
 
         <div class="detail-actions">
-          <button class="btn-primary" @click="configRobot(selectedRobot.id)">配置</button>
+          <button class="btn-primary" @click="startChat(selectedRobot)">发消息</button>
+          <button class="btn-primary" @click="showAddToGroup(selectedRobot)">添加到群</button>
+          <button class="btn-secondary" @click="configRobot(selectedRobot.id)">配置</button>
           <button
             class="btn-secondary"
             :type="selectedRobot.status === 'ACTIVE' ? 'warning' : 'success'"
@@ -132,6 +141,26 @@
         <el-button type="primary" @click="createRobot">创建</el-button>
       </template>
     </el-dialog>
+
+    <!-- 添加到群聊弹窗 -->
+    <el-dialog v-model="showAddGroupDialog" title="添加到群聊" width="400px">
+      <div v-loading="loadingGroups" class="group-selector">
+        <div v-if="!userGroups.length" class="empty-text">暂无可加入的群组</div>
+        <div
+          v-for="group in userGroups"
+          :key="group.id"
+          class="group-item"
+          @click="addToGroup(group.id)"
+        >
+          <div class="group-avatar">{{ group.name?.[0] }}</div>
+          <div class="group-info">
+            <div class="group-name">{{ group.name }}</div>
+            <div class="group-id">ID: {{ group.id }}</div>
+          </div>
+          <el-button type="primary" size="small">添加</el-button>
+        </div>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -139,16 +168,22 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRobotStore } from '@/stores/robot'
+import { useConversationStore } from '@/stores/conversation'
+import { useGroupStore } from '@/stores/group'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import RobotRuleEditor from '@/components/RobotRuleEditor.vue'
 import type { Robot } from '@/types'
 
 const robotStore = useRobotStore()
+const conversationStore = useConversationStore()
+const groupStore = useGroupStore()
 const router = useRouter()
 
 const tab = ref('all')
 const detailTab = ref('info')
 const showCreate = ref(false)
+const showAddGroupDialog = ref(false)
+const loadingGroups = ref(false)
 const selectedRobot = ref<Robot | null>(null)
 const form = ref({ name: '', description: '', type: 'AI' })
 
@@ -159,6 +194,8 @@ const filteredRobots = computed(() => {
   return robotStore.robots.filter(r => r.type === tab.value)
 })
 
+const userGroups = computed(() => groupStore.groups)
+
 function selectRobot(robot: Robot) {
   selectedRobot.value = robot
   detailTab.value = 'info'
@@ -166,6 +203,50 @@ function selectRobot(robot: Robot) {
 
 function configRobot(id: number) {
   router.push(`/robot/${id}/config`)
+}
+
+function copyText(text: string) {
+  navigator.clipboard.writeText(text)
+  ElMessage.success('已复制到剪贴板')
+}
+
+async function startChat(robot: Robot) {
+  if (!robot.virtualUserId) {
+    ElMessage.error('该机器人未绑定虚拟账号')
+    return
+  }
+  try {
+    const conv = await conversationStore.createConversation('SINGLE', robot.virtualUserId)
+    conversationStore.setCurrentConversation(conv)
+    router.push('/conversation')
+  } catch (e: any) {
+    ElMessage.error(e?.message || '创建会话失败')
+  }
+}
+
+async function showAddToGroup(robot: Robot) {
+  if (!robot.virtualUserId) {
+    ElMessage.error('该机器人未绑定虚拟账号')
+    return
+  }
+  showAddGroupDialog.value = true
+  loadingGroups.value = true
+  try {
+    await groupStore.fetchGroups()
+  } finally {
+    loadingGroups.value = false
+  }
+}
+
+async function addToGroup(groupId: number) {
+  if (!selectedRobot.value?.virtualUserId) return
+  try {
+    await groupStore.inviteMembers(groupId, [selectedRobot.value.virtualUserId])
+    ElMessage.success('已成功添加到群聊')
+    showAddGroupDialog.value = false
+  } catch (e: any) {
+    ElMessage.error(e?.message || '添加失败')
+  }
 }
 
 async function toggleStatus(robot: Robot) {
@@ -367,6 +448,61 @@ async function createRobot() {
   align-items: center;
   justify-content: center;
   color: #9CA3AF;
+  font-size: 13px;
+}
+
+/* 群组选择器 */
+.group-selector {
+  max-height: 400px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.group-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border: 1px solid #F3F4F6;
+}
+.group-item:hover {
+  background: #F3F4F6;
+}
+.group-avatar {
+  width: 36px;
+  height: 36px;
+  background: #DBEAFE;
+  color: #2563EB;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.group-info {
+  flex: 1;
+  min-width: 0;
+}
+.group-name {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.group-id {
+  font-size: 12px;
+  color: #9CA3AF;
+}
+.empty-text {
+  text-align: center;
+  color: #9CA3AF;
+  padding: 20px;
   font-size: 13px;
 }
 </style>

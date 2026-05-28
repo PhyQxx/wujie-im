@@ -29,10 +29,10 @@ public class RobotMessageHandler {
             Robot robot = robotService.getRobotByVirtualUserId(robotVirtualUserId);
             if (robot == null || !"ACTIVE".equals(robot.getStatus())) return;
 
-            String reply = generateReply(robot, content);
+            Conversation robotConv = conversationService.getOrCreateSingleConversation(robotVirtualUserId, senderId);
+            String reply = generateReply(robot, robotConv.getId(), content);
             if (reply == null) return;
 
-            Conversation robotConv = conversationService.getOrCreateSingleConversation(robotVirtualUserId, senderId);
             messageService.sendMessage(robotVirtualUserId, robotConv.getId(), reply, "AI");
         } catch (Exception e) {
             log.error("机器人私聊处理失败: robotVirtualUserId={}, senderId={}", robotVirtualUserId, senderId, e);
@@ -49,17 +49,17 @@ public class RobotMessageHandler {
             if ("DELAYED".equals(responseMode)) return;
             if ("MENTION".equals(responseMode) && !isMentioned) return;
 
-            String reply = generateReply(robot, content);
+            Conversation robotConv = conversationService.getOrCreateGroupConversation(robotVirtualUserId, groupId);
+            String reply = generateReply(robot, robotConv.getId(), content);
             if (reply == null) return;
 
-            Conversation robotConv = conversationService.getOrCreateGroupConversation(robotVirtualUserId, groupId);
             messageService.sendMessage(robotVirtualUserId, robotConv.getId(), reply, "AI");
         } catch (Exception e) {
             log.error("机器人群聊处理失败: robotVirtualUserId={}, groupId={}", robotVirtualUserId, groupId, e);
         }
     }
 
-    private String generateReply(Robot robot, String content) {
+    private String generateReply(Robot robot, Long conversationId, String content) {
         String matched = robotService.matchRule(robot.getId(), content);
         if (matched != null) return matched;
 
@@ -68,8 +68,17 @@ public class RobotMessageHandler {
             log.warn("机器人未配置AI: robotId={}", robot.getId());
             return null;
         }
+        
+        // 获取上下文记忆（最近10条消息）
+        List<Message> historyMessages = messageService.getMessages(conversationId, null, 10);
+        List<String> history = new java.util.ArrayList<>();
+        for (Message msg : historyMessages) {
+            String role = msg.getSenderId().equals(robot.getVirtualUserId()) ? "assistant" : "user";
+            history.add(role + ":" + msg.getContent());
+        }
+
         try {
-            return aiService.chat(config, new ArrayList<>(), content);
+            return aiService.chat(config, history, content);
         } catch (Exception e) {
             log.error("AI对话失败: robotId={}", robot.getId(), e);
             return "抱歉，AI服务暂时不可用，请稍后重试。";

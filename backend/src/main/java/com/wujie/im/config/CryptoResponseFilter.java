@@ -32,8 +32,10 @@ public class CryptoResponseFilter extends OncePerRequestFilter {
 
         log.info("[CryptoResponse] 拦截响应: method={}, uri={}", request.getMethod(), uri);
 
-        if (!uri.startsWith("/api/message") && !uri.startsWith("/api/conversation")) {
-            log.info("[CryptoResponse] 非message路径，放行");
+        if (!uri.startsWith("/api/message") && !uri.startsWith("/api/conversation")
+                && !uri.startsWith("/api/friend") && !uri.startsWith("/api/robot")
+                && !uri.startsWith("/api/group")) {
+            log.info("[CryptoResponse] 非加密路径，放行");
             filterChain.doFilter(request, response);
             return;
         }

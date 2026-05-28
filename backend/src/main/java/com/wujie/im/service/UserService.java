@@ -28,7 +28,8 @@ public class UserService {
         if (excludeId != null) {
             q.ne(User::getId, excludeId);
         }
-        q.eq(User::getStatus, 1);
+        // 允许搜索状态为1的用户，或者角色为ROBOT的用户
+        q.and(wrapper -> wrapper.eq(User::getStatus, 1).or().eq(User::getRole, "ROBOT"));
         List<User> users = userMapper.selectList(q);
         users.forEach(u -> u.setPassword(null));
         return users;

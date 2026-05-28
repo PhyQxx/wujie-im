@@ -15,6 +15,8 @@ public class GroupInfo {
     private String type;
     private Long ownerId;
     private Integer needAudit;
+    private Integer muteAll; // 全体禁言: 0-否, 1-是
+    private Long pinnedMessageId; // 置顶消息ID
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

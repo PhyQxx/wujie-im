@@ -32,7 +32,11 @@
               <el-option label="MiniMax" value="MINIMAX" />
               <el-option label="智谱 GLM" value="GLM" />
               <el-option label="DeepSeek" value="DEEPSEEK" />
+              <el-option label="自定义 (OpenAI兼容)" value="CUSTOM" />
             </el-select>
+          </el-form-item>
+          <el-form-item label="API URL" v-if="aiForm.provider === 'CUSTOM'">
+            <el-input v-model="aiForm.apiUrl" placeholder="请输入 API URL，例如 https://api.openai.com/v1/chat/completions" />
           </el-form-item>
           <el-form-item label="模型"><el-input v-model="aiForm.model" /></el-form-item>
           <el-form-item label="API Key"><el-input v-model="aiForm.apiKey" type="password" show-password /></el-form-item>
@@ -70,14 +74,22 @@ const robotStore = useRobotStore()
 const robotId = Number(route.params.id)
 
 const basicForm = ref({ name: '', description: '', responseMode: 'IMMEDIATE', contextSize: 10 })
-const aiForm = ref({ provider: 'MINIMAX', model: '', apiKey: '', systemPrompt: '', temperature: 0.7, maxTokens: 2000 })
+const aiForm = ref({ provider: 'MINIMAX', model: '', apiKey: '', apiUrl: '', systemPrompt: '', temperature: 0.7, maxTokens: 2000 })
 
 onMounted(async () => {
   const robot = robotStore.robots.find(r => r.id === robotId) || (await robotStore.fetchRobots(), robotStore.robots.find(r => r.id === robotId))
   if (robot) {
     basicForm.value = { name: robot.name, description: robot.description || '', responseMode: robot.responseMode, contextSize: robot.contextSize }
     if (robot.aiConfig) {
-      aiForm.value = { provider: robot.aiConfig.provider, model: robot.aiConfig.model, apiKey: robot.aiConfig.apiKey, systemPrompt: robot.aiConfig.systemPrompt || '', temperature: robot.aiConfig.temperature, maxTokens: robot.aiConfig.maxTokens }
+      aiForm.value = { 
+        provider: robot.aiConfig.provider, 
+        model: robot.aiConfig.model, 
+        apiKey: robot.aiConfig.apiKey, 
+        apiUrl: robot.aiConfig.apiUrl || '', 
+        systemPrompt: robot.aiConfig.systemPrompt || '', 
+        temperature: robot.aiConfig.temperature, 
+        maxTokens: robot.aiConfig.maxTokens 
+      }
     }
   }
 })

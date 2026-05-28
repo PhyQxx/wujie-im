@@ -24,8 +24,10 @@ export const useGroupStore = defineStore('group', () => {
     loading.value = true
     try {
       const userId = localStorage.getItem('userId')
+      console.log('[GroupStore] Fetching groups for userId:', userId)
       if (!userId) return
       const res = await request.get(`/group/list/${userId}`)
+      console.log('[GroupStore] Raw groups response:', res.data)
       groups.value = res.data || []
     } finally {
       loading.value = false
@@ -105,6 +107,21 @@ export const useGroupStore = defineStore('group', () => {
     const userStore = useUserStore()
     await request.put(`/group/admin/${groupId}/${targetUserId}?operatorId=${userStore.currentUser?.id}&isAdmin=${isAdmin}`)
     await fetchMembers(groupId)
+  }
+
+  async function muteGroup(groupId: number, mute: boolean) {
+    const userStore = useUserStore()
+    await request.put(`/group/mute-all/${groupId}?mute=${mute}&operatorId=${userStore.currentUser?.id}`)
+    if (currentGroup.value?.id === groupId) currentGroup.value.muteAll = mute ? 1 : 0
+  }
+
+  async function transferOwnership(groupId: number, newOwnerId: number) {
+    const userStore = useUserStore()
+    await request.put(`/group/transfer/${groupId}?newOwnerId=${newOwnerId}&operatorId=${userStore.currentUser?.id}`)
+    if (currentGroup.value?.id === groupId) {
+      currentGroup.value.ownerId = newOwnerId
+      await fetchMembers(groupId)
+    }
   }
 
   async function getJoinRequests(groupId: number) {

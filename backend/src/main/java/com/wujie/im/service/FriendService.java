@@ -55,6 +55,18 @@ public class FriendService {
             r2.setFriendId(fromUserId);
             r2.setGroupId(1L);
             friendRelationMapper.insert(r2);
+            
+            // 自动创建会话
+            try {
+                com.wujie.im.service.ConversationService conversationService = 
+                    com.wujie.im.common.SpringContextUtil.getBean(com.wujie.im.service.ConversationService.class);
+                if (conversationService != null) {
+                    conversationService.getOrCreateSingleConversation(fromUserId, toUserId);
+                }
+            } catch (Exception e) {
+                log.warn("自动创建机器人会话失败: {}", e.getMessage());
+            }
+
             return;
         }
 
@@ -150,6 +162,12 @@ public class FriendService {
             relation.setGroupId(groupId);
             friendRelationMapper.updateById(relation);
         }
+    }
+
+    public List<Long> getFriendIds(Long userId) {
+        return friendRelationMapper.selectList(
+                new LambdaQueryWrapper<FriendRelation>().eq(FriendRelation::getUserId, userId)
+        ).stream().map(FriendRelation::getFriendId).toList();
     }
 
     public void setFriendRemark(Long userId, Long friendId, String remark) {

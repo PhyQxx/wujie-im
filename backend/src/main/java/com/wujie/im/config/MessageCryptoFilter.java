@@ -36,7 +36,9 @@ public class MessageCryptoFilter implements Filter {
         HttpServletResponse response = (HttpServletResponse) servletResponse;
 
         String uri = request.getRequestURI();
-        if (!uri.startsWith("/api/message")) {
+        if (!uri.startsWith("/api/message") && !uri.startsWith("/api/conversation") 
+                && !uri.startsWith("/api/friend") && !uri.startsWith("/api/robot")
+                && !uri.startsWith("/api/group")) {
             chain.doFilter(request, response);
             return;
         }

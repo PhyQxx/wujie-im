@@ -22,6 +22,8 @@ public class GroupController {
     private UserMapper userMapper;
     @Autowired
     private UserService userService;
+    @Autowired
+    private org.redisson.api.RedissonClient redissonClient;
 
     @PostMapping("/create")
     public Result<GroupInfo> createGroup(@RequestBody Map<String, Object> params) {
@@ -161,6 +163,50 @@ public class GroupController {
                                   @RequestParam Long operatorId,
                                   @RequestParam boolean isAdmin) {
         groupService.setAdmin(groupId, targetUserId, operatorId, isAdmin);
+        return Result.success();
+    }
+
+    @PutMapping("/mute-all/{groupId}")
+    public Result<Void> muteGroup(@PathVariable Long groupId, @RequestParam boolean mute, @RequestParam Long operatorId) {
+        groupService.muteGroup(groupId, mute, operatorId);
+        return Result.success();
+    }
+
+    @PutMapping("/pin/{groupId}/{messageId}")
+    public Result<Void> pinMessage(@PathVariable Long groupId, @PathVariable Long messageId, @RequestParam Long operatorId) {
+        groupService.pinMessage(groupId, messageId, operatorId);
+        return Result.success();
+    }
+
+    @PutMapping("/transfer/{groupId}")
+    public Result<Void> transferOwnership(@PathVariable Long groupId, @RequestParam Long newOwnerId, @RequestParam Long operatorId) {
+        groupService.transferOwnership(groupId, newOwnerId, operatorId);
+        return Result.success();
+    }
+
+    @GetMapping("/invite-token/{groupId}")
+    public Result<String> getInviteToken(@PathVariable Long groupId, @RequestParam Long operatorId) {
+        return Result.success(groupService.generateInviteToken(groupId, operatorId));
+    }
+
+    @GetMapping("/invite-info/{token}")
+    public Result<GroupInfo> getInviteInfo(@PathVariable String token) {
+        Object groupIdObj = redissonClient.getBucket("group_invite:" + token).get();
+        if (groupIdObj == null) return Result.error("邀请链接已失效");
+        Long groupId = Long.valueOf(groupIdObj.toString());
+        GroupInfo group = groupService.getGroupById(groupId);
+        if (group != null) {
+            group.setMemberCount(groupService.getGroupMemberIds(groupId).size());
+        }
+        return Result.success(group);
+    }
+
+    @PostMapping("/join-by-token")
+    public Result<Void> joinByToken(@RequestBody Map<String, Object> params) {
+        groupService.joinByInviteToken(
+                (String) params.get("token"),
+                Long.valueOf(params.get("userId").toString())
+        );
         return Result.success();
     }
 

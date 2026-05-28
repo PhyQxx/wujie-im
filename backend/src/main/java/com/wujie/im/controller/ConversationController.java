@@ -25,6 +25,8 @@ public class ConversationController {
     private UserMapper userMapper;
     @Autowired
     private GroupInfoMapper groupInfoMapper;
+    @Autowired
+    private com.wujie.im.common.JwtUtil jwtUtil;
 
     @GetMapping("/list/{userId}")
     public Result<List<Conversation>> getConversations(@PathVariable Long userId) {
@@ -44,16 +46,26 @@ public class ConversationController {
     }
 
     @PostMapping("/single")
-    public Result<Conversation> createSingleConversation(@RequestBody Map<String, Object> params) {
+    public Result<Conversation> createSingleConversation(@RequestBody Map<String, Object> params,
+                                                        @RequestHeader(value = "Authorization", required = false) String auth) {
+        Long userId = toLong(params.get("userId"));
+        if (userId == null && auth != null && auth.startsWith("Bearer ")) {
+            userId = jwtUtil.getUserId(auth.substring(7));
+        }
         return Result.success(conversationService.getOrCreateSingleConversation(
-                toLong(params.get("userId")), toLong(params.get("otherUserId"))
+                userId, toLong(params.get("otherUserId"))
         ));
     }
 
     @PostMapping("/group")
-    public Result<Conversation> createGroupConversation(@RequestBody Map<String, Object> params) {
+    public Result<Conversation> createGroupConversation(@RequestBody Map<String, Object> params,
+                                                       @RequestHeader(value = "Authorization", required = false) String auth) {
+        Long userId = toLong(params.get("userId"));
+        if (userId == null && auth != null && auth.startsWith("Bearer ")) {
+            userId = jwtUtil.getUserId(auth.substring(7));
+        }
         Conversation conv = conversationService.getOrCreateGroupConversation(
-                toLong(params.get("userId")), toLong(params.get("groupId"))
+                userId, toLong(params.get("groupId"))
         );
         GroupInfo group = groupInfoMapper.selectById(conv.getTypeId());
         conv.setGroupInfo(group);

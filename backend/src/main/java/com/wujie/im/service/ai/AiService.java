@@ -15,6 +15,8 @@ public class AiService {
     private GlmService glmService;
     @Autowired
     private DeepSeekService deepSeekService;
+    @Autowired
+    private CustomAiService customAiService;
 
     public String chat(AiConfig config, List<String> history, String userMessage) {
         String provider = config.getProvider();
@@ -25,6 +27,8 @@ public class AiService {
                 return glmService.chat(config, history, userMessage);
             case "DEEPSEEK":
                 return deepSeekService.chat(config, history, userMessage);
+            case "CUSTOM":
+                return customAiService.chat(config, history, userMessage);
             default:
                 throw new RuntimeException("不支持的AI提供商: " + provider);
         }

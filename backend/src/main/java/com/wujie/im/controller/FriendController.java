@@ -17,11 +17,17 @@ public class FriendController {
     private FriendService friendService;
     @Autowired
     private UserMapper userMapper;
+    @Autowired
+    private com.wujie.im.common.JwtUtil jwtUtil;
 
     @PostMapping("/request")
-    public Result<Void> sendRequest(@RequestBody Map<String, Object> params) {
+    public Result<Void> sendRequest(@RequestBody Map<String, Object> params,
+                                   @RequestHeader(value = "Authorization", required = false) String auth) {
         try {
             Long fromUserId = params.get("fromUserId") != null ? Long.valueOf(params.get("fromUserId").toString()) : null;
+            if (fromUserId == null && auth != null && auth.startsWith("Bearer ")) {
+                fromUserId = jwtUtil.getUserId(auth.substring(7));
+            }
             Long toUserId = params.get("toUserId") != null ? Long.valueOf(params.get("toUserId").toString()) : null;
             if (fromUserId == null || toUserId == null) {
                 return Result.error(400, "缺少必要参数 fromUserId 或 toUserId");
@@ -34,7 +40,11 @@ public class FriendController {
     }
 
     @GetMapping("/requests/{userId}")
-    public Result<List<FriendRequest>> getRequests(@PathVariable Long userId) {
+    public Result<List<FriendRequest>> getRequests(@PathVariable Long userId,
+                                                  @RequestHeader(value = "Authorization", required = false) String auth) {
+        if ((userId == null || userId == 0) && auth != null && auth.startsWith("Bearer ")) {
+            userId = jwtUtil.getUserId(auth.substring(7));
+        }
         List<FriendRequest> requests = friendService.getRequests(userId);
         // 填充申请人用户信息
         for (FriendRequest req : requests) {
@@ -52,7 +62,11 @@ public class FriendController {
     }
 
     @GetMapping("/list/{userId}")
-    public Result<List<Map<String, Object>>> getFriends(@PathVariable Long userId) {
+    public Result<List<Map<String, Object>>> getFriends(@PathVariable Long userId,
+                                                       @RequestHeader(value = "Authorization", required = false) String auth) {
+        if ((userId == null || userId == 0) && auth != null && auth.startsWith("Bearer ")) {
+            userId = jwtUtil.getUserId(auth.substring(7));
+        }
         return Result.success(friendService.getFriends(userId));
     }
 

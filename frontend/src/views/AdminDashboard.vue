@@ -10,13 +10,51 @@
         <div class="stat-card dark" v-for="stat in stats" :key="stat.label">
           <div class="stat-icon" :style="{ background: stat.iconBg }">
             <svg v-if="stat.key === 'totalUsers'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
-            <svg v-else-if="stat.key === 'todayUsers'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"></path></svg>
-            <svg v-else-if="stat.key === 'totalGroups'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
-            <svg v-else-if="stat.key === 'todayMessages'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path></svg>
-            <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            <svg v-else-if="stat.key === 'onlineUsers'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+            <svg v-else-if="stat.key === 'requestsPerMinute'" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
+            <svg v-else xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
           </div>
           <div class="stat-value">{{ stat.value }}</div>
           <div class="stat-label">{{ stat.label }}</div>
+        </div>
+      </div>
+
+      <div class="monitor-grid">
+        <div class="monitor-card">
+          <div class="monitor-header">
+            <h3>JVM 内存状态</h3>
+            <el-tag size="small" type="success">运行中</el-tag>
+          </div>
+          <div class="mem-chart-wrap">
+            <el-progress type="dashboard" :percentage="Math.round((deepStats.jvmHeapUsed / deepStats.jvmHeapMax) * 100) || 0" :color="colors">
+              <template #default="{ percentage }">
+                <span class="percentage-value">{{ percentage }}%</span>
+                <span class="percentage-label">已用堆内存</span>
+              </template>
+            </el-progress>
+            <div class="mem-info">
+              <div class="mem-item"><span>已使用:</span> <strong>{{ deepStats.jvmHeapUsed }} MB</strong></div>
+              <div class="mem-item"><span>最大可用:</span> <strong>{{ deepStats.jvmHeapMax }} MB</strong></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="monitor-card">
+          <div class="monitor-header">
+            <h3>Redis & 运行时长</h3>
+          </div>
+          <div class="extra-stats">
+            <div class="extra-item">
+              <div class="extra-label">Redis 命中率 / 客户端</div>
+              <div class="extra-value">
+                {{ deepStats.redisHitRate }}% <span class="divider">/</span> {{ deepStats.redisClients }} <span class="unit">连接</span>
+              </div>
+            </div>
+            <div class="extra-item">
+              <div class="extra-label">系统运行时长</div>
+              <div class="extra-value">{{ formatUptime(deepStats.uptime) }}</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -286,9 +324,10 @@
         <el-table-column prop="model" label="模型" />
         <el-table-column prop="temperature" label="温度" width="80" />
         <el-table-column prop="maxTokens" label="最大Token" width="100" />
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="180">
           <template #default="{ row }">
             <el-button size="small" @click="openAiConfigDialog(row)">编辑</el-button>
+            <el-button size="small" type="warning" @click="copyAiConfig(row)">复制</el-button>
             <el-button size="small" type="danger" @click="deleteAiConfig(row.id)">删除</el-button>
           </template>
         </el-table-column>
@@ -304,6 +343,7 @@
               <el-option label="MiniMax" value="MINIMAX" />
               <el-option label="GLM" value="GLM" />
               <el-option label="DeepSeek" value="DEEPSEEK" />
+              <el-option label="自定义 (OpenAI兼容)" value="CUSTOM" />
             </el-select>
           </el-form-item>
           <el-form-item label="模型">
@@ -365,7 +405,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { adminApi } from '@/api/admin'
 import { groupApi } from '@/api/group'
@@ -391,10 +431,10 @@ const tabTitle = computed(() => tabTitles[activeTab.value] || '管理后台')
 
 const stats = ref([
   { label: '总用户数', value: 0, key: 'totalUsers', iconBg: '#3B82F6' },
-  { label: '今日新增用户', value: 0, key: 'todayUsers', iconBg: '#10B981' },
-  { label: '群组数', value: 0, key: 'totalGroups', iconBg: '#F59E0B' },
+  { label: '在线用户', value: 0, key: 'onlineUsers', iconBg: '#10B981' },
+  { label: 'API 频率', value: 0, key: 'requestsPerMinute', iconBg: '#F59E0B' },
   { label: '今日消息', value: 0, key: 'todayMessages', iconBg: '#EF4444' },
-  { label: '机器人数', value: 0, key: 'totalRobots', iconBg: '#8B5CF6' }
+  { label: '今日新增', value: 0, key: 'todayUsers', iconBg: '#8B5CF6' }
 ])
 
 const operationStats = ref([
@@ -403,6 +443,20 @@ const operationStats = ref([
   { label: '消息总量', value: 0, iconBg: '#F59E0B' },
   { label: '活跃群组', value: 0, iconBg: '#8B5CF6' }
 ])
+
+const deepStats = ref({
+  jvmHeapUsed: 0,
+  jvmHeapMax: 1,
+  redisClients: 0,
+  redisHitRate: '0.00',
+  uptime: 0
+})
+
+const colors = [
+  { color: '#10B981', percentage: 40 },
+  { color: '#F59E0B', percentage: 70 },
+  { color: '#EF4444', percentage: 90 }
+]
 
 const users = ref<any[]>([])
 const userSearch = ref('')
@@ -445,9 +499,15 @@ const groupMessages = ref<any[]>([])
 const msgLoading = ref(false)
 const hasMoreMessages = ref(true)
 
+let statsTimer: any = null
 onMounted(() => {
   loadStats()
   loadTabData()
+  statsTimer = setInterval(loadStats, 10000)
+})
+
+onUnmounted(() => {
+  if (statsTimer) clearInterval(statsTimer)
 })
 
 // 创建用户
@@ -575,14 +635,34 @@ async function loadStats() {
   try {
     const res = await adminApi.stats()
     if (res.data) {
-      stats.value.forEach(s => { s.value = res.data[s.key] || 0 })
+      stats.value.forEach(s => { 
+        s.value = res.data[s.key] !== undefined ? res.data[s.key] : 0 
+      })
+      
+      // 更新深层指标
+      deepStats.value = {
+        jvmHeapUsed: res.data.jvmHeapUsed || 0,
+        jvmHeapMax: res.data.jvmHeapMax || 1,
+        redisClients: res.data.redisClients || 0,
+        redisHitRate: res.data.redisHitRate || '0.00',
+        uptime: res.data.uptime || 0
+      }
+      
       // 同步运营数据
-      operationStats.value[0].value = res.data['todayUsers'] || 0
-      operationStats.value[1].value = res.data['todayMessages'] || 0
-      operationStats.value[2].value = res.data['todayMessages'] || 0
+      operationStats.value[0].value = res.data['onlineUsers'] || 0
+      operationStats.value[1].value = res.data['requestsPerMinute'] || 0
+      operationStats.value[2].value = res.data['totalMessages'] || 0
       operationStats.value[3].value = res.data['totalGroups'] || 0
     }
   } catch (_e) {}
+}
+
+function formatUptime(seconds: number) {
+  if (seconds < 60) return seconds + ' 秒'
+  if (seconds < 3600) return Math.floor(seconds / 60) + ' 分钟'
+  const h = Math.floor(seconds / 3600)
+  const m = Math.floor((seconds % 3600) / 60)
+  return h + ' 小时 ' + m + ' 分'
 }
 
 async function loadUsers() {
@@ -684,6 +764,16 @@ async function deleteAiConfig(id: number) {
   ElMessage.success('已删除')
 }
 
+function copyAiConfig(row: any) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id, createTime, updateTime, ...rest } = row
+  aiForm.value = { 
+    ...rest,
+    name: (rest.name || '') + ' (副本)'
+  }
+  showAiDialog.value = true
+}
+
 // 系统配置
 async function loadSystemConfigs() {
   try {
@@ -760,4 +850,21 @@ async function loadMoreMessages() {
 .ops-card-title { font-size: 13px; color: var(--text-secondary); margin-bottom: 8px; }
 .ops-card-value { font-size: 24px; font-weight: 700; color: var(--text-primary); }
 .ops-card-value span { font-size: 12px; font-weight: 400; color: var(--text-muted); }
+
+.monitor-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
+.monitor-card { background: white; border: 1px solid var(--border); border-radius: 12px; padding: 20px; }
+.monitor-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.monitor-header h3 { font-size: 15px; font-weight: 600; margin: 0; }
+.mem-chart-wrap { display: flex; align-items: center; justify-content: space-around; }
+.mem-info { display: flex; flex-direction: column; gap: 8px; }
+.mem-item { font-size: 13px; color: var(--text-secondary); }
+.mem-item strong { color: var(--text-primary); margin-left: 4px; }
+.percentage-value { display: block; margin-top: 10px; font-size: 20px; font-weight: 700; }
+.percentage-label { display: block; margin-top: 2px; font-size: 10px; color: var(--text-muted); }
+.extra-stats { display: flex; flex-direction: column; gap: 20px; padding-top: 10px; }
+.extra-item {}
+.extra-label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.extra-value { font-size: 20px; font-weight: 700; color: var(--text-primary); }
+.extra-value span.unit { font-size: 12px; font-weight: 400; color: var(--text-muted); margin-left: 4px; }
+.extra-value span.divider { margin: 0 8px; color: var(--border); font-weight: 300; }
 </style>

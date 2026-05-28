@@ -475,8 +475,8 @@ async function doSearchUser() {
   if (searchTimer) clearTimeout(searchTimer)
   if (!searchUser.value.trim()) { searchResults.value = []; return }
   searchTimer = setTimeout(async () => {
-    const currentUserId = Number(localStorage.getItem('userId'))
-    const results = await friendStore.searchUsers(searchUser.value, currentUserId)
+    // 搜索时不排除任何人，由后端控制（后端已修改为包含机器人）
+    const results = await friendStore.searchUsers(searchUser.value)
     searchResults.value = results || []
   }, 300)
 }

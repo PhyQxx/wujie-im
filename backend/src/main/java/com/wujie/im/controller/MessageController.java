@@ -38,6 +38,11 @@ public class MessageController {
         return Result.success(messageService.getMessages(conversationId, beforeId, limit));
     }
 
+    @GetMapping("/search")
+    public Result<List<Message>> searchMessages(@RequestParam Long conversationId, @RequestParam String keyword) {
+        return Result.success(messageService.searchMessages(conversationId, keyword));
+    }
+
     @PutMapping("/read")
     public Result<Void> markAsRead(@RequestBody Map<String, Long> params) {
         messageService.markAsRead(params.get("userId"), params.get("conversationId"), params.get("messageId"));

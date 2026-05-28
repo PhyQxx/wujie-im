@@ -18,29 +18,99 @@
           <button class="header-btn" title="更多">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M5 12h.01M12 12h.01M19 12h.01M5 19h.01M12 19h.01M19 19h.01M5 7h.01M12 7h.01M19 7h.01M12 12h.01"></path></svg>
           </button>
+          <button class="header-btn" :class="{ active: showSidebar }" @click="showSidebar = !showSidebar" title="侧边栏">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+          </button>
           <button class="header-btn" @click="$router.push('/contacts')" title="联系人">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
           </button>
         </div>
       </div>
 
-      <div class="messages" ref="messageListRef" @scroll="onMessageScroll">
-        <!-- 加载更多指示器 -->
-        <div v-if="loadingMore" class="loading-more">
-          <span class="loading-spinner"></span>
-          <span>加载中...</span>
+      <div class="chat-window-main">
+        <div class="chat-messages-container">
+          <div class="messages" ref="messageListRef" @scroll="onMessageScroll">
+            <!-- 加载更多指示器 -->
+            <div v-if="loadingMore" class="loading-more">
+              <span class="loading-spinner"></span>
+              <span>加载中...</span>
+            </div>
+            <div v-else-if="!hasMore && messages.length > 0" class="loading-more no-more">
+              — 已加载全部消息 —
+            </div>
+            <div class="date-divider"><span>今天</span></div>
+            <MessageBubble
+              v-for="msg in messages"
+              :key="msg.id"
+              :id="'msg-' + msg.id"
+              :message="msg"
+              :is-mine="msg.senderId === currentUserId"
+              @reply="(m) => setReplyingTo(m)"
+            />
+            <!-- 机器人打字提示 -->
+            <div v-if="isRobotTyping" class="typing-indicator">
+              <div class="typing-avatar">🤖</div>
+              <div class="typing-bubble">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 回到底部按钮 -->
+          <transition name="fade">
+            <button v-if="userHasScrolledUp" class="scroll-bottom-btn" @click="scrollToBottom">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7-7-7m14-8l-7 7-7-7"></path></svg>
+              <span>有新消息</span>
+            </button>
+          </transition>
         </div>
-        <div v-else-if="!hasMore && messages.length > 0" class="loading-more no-more">
-          — 已加载全部消息 —
-        </div>
-        <div class="date-divider"><span>今天</span></div>
-        <MessageBubble
-          v-for="msg in messages"
-          :key="msg.id"
-          :message="msg"
-          :is-mine="msg.senderId === currentUserId"
-          @reply="(m) => setReplyingTo(m)"
-        />
+
+        <!-- 侧边栏：中心区域 -->
+        <transition name="slide-right">
+          <div v-if="showSidebar" class="chat-sidebar">
+            <div class="sidebar-header-tabs">
+              <div class="sidebar-tab" :class="{ active: activeSidebarTab === 'files' }" @click="activeSidebarTab = 'files'">文件</div>
+              <div class="sidebar-tab" :class="{ active: activeSidebarTab === 'search' }" @click="activeSidebarTab = 'search'">搜索</div>
+              <button class="close-sidebar-icon" @click="showSidebar = false">✕</button>
+            </div>
+
+            <!-- 文件列表 -->
+            <div v-if="activeSidebarTab === 'files'" class="sidebar-content">
+              <div class="file-list">
+                <div v-for="file in recentFiles" :key="file.id" class="file-item">
+                  <div class="file-icon">📄</div>
+                  <div class="file-info">
+                    <div class="file-name">{{ getFileName(file) }}</div>
+                    <div class="file-meta">{{ formatSize(getFileSize(file)) }} · {{ formatTime(file.createTime) }}</div>
+                  </div>
+                  <button class="file-download" @click="downloadFile(file.content)">↓</button>
+                </div>
+                <div v-if="!recentFiles.length" class="empty-sidebar">暂无文件记录</div>
+              </div>
+            </div>
+
+            <!-- 消息搜索 -->
+            <div v-if="activeSidebarTab === 'search'" class="sidebar-content search-content">
+              <div class="search-input-wrap">
+                <el-input v-model="searchKeyword" placeholder="搜索关键词..." prefix-icon="Search" clearable @input="doSearch" />
+              </div>
+              <div class="search-results">
+                <div v-for="res in searchResults" :key="res.id" class="search-result-item" @click="jumpToMessage(res.id)">
+                  <div class="search-res-header">
+                    <span class="search-res-sender">{{ res.senderName || '用户' }}</span>
+                    <span class="search-res-time">{{ formatTime(res.createTime) }}</span>
+                  </div>
+                  <div class="search-res-text" v-html="highlightKeyword(res.content, searchKeyword)" />
+                </div>
+                <div v-if="searchKeyword && !searchResults.length && !searching" class="empty-sidebar">无匹配结果</div>
+                <div v-if="searching" class="empty-sidebar">搜索中...</div>
+                <div v-if="!searchKeyword" class="empty-sidebar">输入内容开始搜索</div>
+              </div>
+            </div>
+          </div>
+        </transition>
       </div>
 
       <div class="input-area">
@@ -84,6 +154,23 @@
           <div class="md-editor-wrap" @click="startEditing">
             <!-- 渲染层：失去焦点时显示 -->
             <div v-if="!isEditing && inputText" class="md-render-layer" v-html="getRenderedLines()" />
+            
+            <!-- @ 提及列表 -->
+            <div v-if="showMentionList && filteredMembers.length" class="mention-list-popover">
+              <div
+                v-for="(m, idx) in filteredMembers"
+                :key="m.userId"
+                class="mention-item"
+                :class="{ active: idx === mentionIndex }"
+                @click="insertMention(m)"
+              >
+                <div class="mention-avatar" :style="{ background: getAvatarBgFromUser(m.user) }">
+                  {{ m.user?.username?.[0] }}
+                </div>
+                <span class="mention-name">{{ m.user?.username }}</span>
+              </div>
+            </div>
+
             <!-- 编辑层：聚焦时显示 -->
             <textarea
               v-if="isEditing"
@@ -91,14 +178,15 @@
               class="md-editor"
               v-model="inputText"
               placeholder="输入消息，支持 Markdown..."
-              :rows="editorRows"
+              :style="{ height: editorHeight + 'px' }"
               @focus="isEditing = true"
               @blur="onEditorBlur"
               @input="onEditorInput"
+              @keydown="handleMentionKeydown"
               @keydown.enter.exact.prevent="sendMessage"
             />
             <!-- 默认占位：未编辑且无内容时 -->
-            <div v-if="!inputText && !isEditing" class="md-placeholder">输入消息，支持 Markdown...</div>
+            <div v-if="!inputText && !isEditing" class="md-placeholder" style="height: 40px">输入消息，支持 Markdown...</div>
           </div>
           <button class="send-btn" @click="sendMessage" :disabled="!inputText.trim() && !pendingImages.length && !uploading">
             <span v-if="uploading" class="uploading-spinner">⏳</span>
@@ -122,14 +210,17 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useConversationStore } from '@/stores/conversation'
 import { useMessageStore } from '@/stores/message'
+import { useGroupStore } from '@/stores/group'
 import { ElMessage } from 'element-plus'
 import { messageApi } from '@/api/message'
 import { marked } from 'marked'
+import dayjs from 'dayjs'
 import MessageBubble from '@/components/MessageBubble.vue'
 import type { Conversation } from '@/types'
 
 const conversationStore = useConversationStore()
 const messageStore = useMessageStore()
+const groupStore = useGroupStore()
 
 const inputText = ref('')
 const messageListRef = ref<HTMLElement>()
@@ -138,12 +229,39 @@ const fileInput = ref<HTMLInputElement>()
 const textareaRef = ref<HTMLTextAreaElement>()
 const uploading = ref(false)
 const replyingTo = ref<any>(null)
+const showSidebar = ref(false)
+const activeSidebarTab = ref<'files' | 'search'>('files')
 const atAllActive = ref(false)
+const searchKeyword = ref('')
+const searchResults = ref<any[]>([])
+const searching = ref(false)
 const userHasScrolledUp = ref(false)
 const isProgrammaticScroll = ref(false)
 const pendingImages = ref<string[]>([]) // 待发送的图片 URL 列表
 const isEditing = ref(false) // 编辑器是否获得焦点
+const editorHeight = ref(40) // 初始高度
 const editorRows = ref(1) // textarea 行数
+
+const showMentionList = ref(false)
+const mentionSearch = ref('')
+const mentionIndex = ref(0)
+const atUserIds = ref<number[]>([])
+
+const filteredMembers = computed(() => {
+  if (!mentionSearch.value) return groupStore.members
+  return groupStore.members.filter(m => 
+    m.user?.username?.toLowerCase().includes(mentionSearch.value.toLowerCase())
+  )
+})
+
+const editorHeightStyle = computed(() => {
+  const lineCount = inputText.value.split('\n').length
+  return Math.min(Math.max(lineCount * 24 + 16, 40), 200)
+})
+
+watch(inputText, () => {
+  editorHeight.value = editorHeightStyle.value
+}, { immediate: true })
 
 // 来自 store
 const loadingMore = computed(() => messageStore.loadingMore)
@@ -154,6 +272,45 @@ const emojis = ['😀','😃','😄','😁','😆','😅','😂','🤣','😊','
 const currentConversation = computed(() => conversationStore.currentConversation)
 const messages = computed(() => messageStore.messages)
 const currentUserId = computed(() => Number(localStorage.getItem('userId')))
+const isRobotTyping = computed(() => messageStore.isRobotTyping)
+
+const recentFiles = computed(() => {
+  return messages.value.filter(m => m.contentType === 'FILE' && !m.recall).reverse()
+})
+
+function formatSize(bytes: number) {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+function getFileName(file: any) {
+  try {
+    const meta = JSON.parse(file.meta)
+    return meta.filename || '未知文件'
+  } catch {
+    return '文件'
+  }
+}
+
+function getFileSize(file: any) {
+  try {
+    const meta = JSON.parse(file.meta)
+    return Number(meta.size) || 0
+  } catch {
+    return 0
+  }
+}
+
+function downloadFile(url: string) {
+  window.open(url, '_blank')
+}
+
+function formatTime(time: string) {
+  return dayjs(time).format('MM-DD HH:mm')
+}
 
 // 切换会话时加载历史消息
 watch(currentConversation, (conv) => {
@@ -191,6 +348,44 @@ watch(messages, (newVal, oldVal) => {
   }
 }, { flush: 'post' })
 
+let searchTimer: any = null
+function doSearch() {
+  if (searchTimer) clearTimeout(searchTimer)
+  if (!searchKeyword.value.trim()) {
+    searchResults.value = []
+    return
+  }
+  searchTimer = setTimeout(async () => {
+    searching.value = true
+    try {
+      const res = await messageApi.search({
+        conversationId: currentConversation.value!.id,
+        keyword: searchKeyword.value
+      })
+      searchResults.value = res.data || []
+    } finally {
+      searching.value = false
+    }
+  }, 500)
+}
+
+function highlightKeyword(text: string, keyword: string) {
+  if (!keyword || !text) return text
+  const reg = new RegExp(`(${keyword})`, 'gi')
+  return text.replace(reg, '<span class="highlight">$1</span>')
+}
+
+function jumpToMessage(msgId: number) {
+  const el = document.getElementById(`msg-${msgId}`)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el.classList.add('jump-highlight')
+    setTimeout(() => el.classList.remove('jump-highlight'), 2000)
+  } else {
+    ElMessage.info('该消息较久，请向上滚动加载更多')
+  }
+}
+
 function getConvName(conv: Conversation) {
   if (conv.type === 'GROUP') return conv.groupInfo?.name || '群组'
   return conv.targetUser?.username || '用户'
@@ -207,10 +402,32 @@ function isOnline(conv: Conversation) {
   return conv.targetUser?.userStatus === 'ONLINE'
 }
 
+function getAvatarBgFromUser(user: any) {
+  if (!user) return '#ccc'
+  const colors = ['#DBEAFE', '#D1FAE5', '#FCE7F3', '#FEF3C7', '#FEE2E2', '#F3E8FF']
+  const name = user.username || ''
+  return colors[name.charCodeAt(0) % colors.length]
+}
+
 async function sendMessage() {
   if ((!inputText.value.trim() && !pendingImages.value.length) || !currentConversation.value) return
-  const meta = atAllActive.value ? JSON.stringify({ atAll: true }) : null
+  
+  // 构建元数据
+  const metaObj: any = {}
+  if (atAllActive.value) metaObj.atAll = true
+  if (atUserIds.value.length > 0) {
+    // 过滤掉已经在文本中被删掉的@
+    const activeAtIds = atUserIds.value.filter(id => {
+      const member = groupStore.members.find(m => m.userId === id)
+      return member && inputText.value.includes(`@${member.user.username}`)
+    })
+    if (activeAtIds.length > 0) metaObj.atUserIds = activeAtIds
+  }
+
+  const meta = Object.keys(metaObj).length > 0 ? JSON.stringify(metaObj) : null
+  
   atAllActive.value = false
+  atUserIds.value = []
   const replyId = replyingTo.value?.id || undefined
   replyingTo.value = null
 
@@ -342,10 +559,75 @@ function startEditing() {
   }
 }
 
-function onEditorInput() {
-  // 更新 textarea 行数
-  const lineCount = inputText.value.split('\n').length
-  editorRows.value = Math.min(Math.max(lineCount, 1), 8)
+function onEditorInput(e: Event) {
+  // 1. 更新高度
+  editorHeight.value = editorHeightStyle.value
+
+  // 2. @ 功能检测
+  const target = e.target as HTMLTextAreaElement
+  const pos = target.selectionStart
+  const textBefore = inputText.value.substring(0, pos)
+  
+  if (currentConversation.value?.type === 'GROUP') {
+    const lastAtIdx = textBefore.lastIndexOf('@')
+    if (lastAtIdx !== -1) {
+      const searchPart = textBefore.substring(lastAtIdx + 1)
+      // 如果@后面没有空格，且长度适中，开启选择
+      if (!searchPart.includes(' ') && !searchPart.includes('\n') && searchPart.length < 15) {
+        showMentionList.value = true
+        mentionSearch.value = searchPart
+        mentionIndex.value = 0
+      } else {
+        showMentionList.value = false
+      }
+    } else {
+      showMentionList.value = false
+    }
+  }
+}
+
+function handleMentionKeydown(e: KeyboardEvent) {
+  if (!showMentionList.value) return
+
+  if (e.key === 'ArrowUp') {
+    e.preventDefault()
+    mentionIndex.value = (mentionIndex.value - 1 + filteredMembers.value.length) % (filteredMembers.value.length || 1)
+  } else if (e.key === 'ArrowDown') {
+    e.preventDefault()
+    mentionIndex.value = (mentionIndex.value + 1) % (filteredMembers.value.length || 1)
+  } else if (e.key === 'Enter' || e.key === 'Tab') {
+    e.preventDefault()
+    const member = filteredMembers.value[mentionIndex.value]
+    if (member) insertMention(member)
+  } else if (e.key === 'Escape') {
+    showMentionList.value = false
+  }
+}
+
+function insertMention(member: any) {
+  const target = textareaRef.value
+  if (!target) return
+  
+  const pos = target.selectionStart
+  const textBefore = inputText.value.substring(0, pos)
+  const textAfter = inputText.value.substring(pos)
+  
+  const lastAtIdx = textBefore.lastIndexOf('@')
+  const newTextBefore = textBefore.substring(0, lastAtIdx) + `@${member.user.username} `
+  
+  inputText.value = newTextBefore + textAfter
+  showMentionList.value = false
+  
+  // 记录选中的用户ID
+  if (!atUserIds.value.includes(member.userId)) {
+    atUserIds.value.push(member.userId)
+  }
+
+  nextTick(() => {
+    target.focus()
+    const newPos = newTextBefore.length
+    target.setSelectionRange(newPos, newPos)
+  })
 }
 
 function scrollToBottom() {
@@ -400,6 +682,7 @@ defineExpose({ scrollToBottom, setReplyingTo })
 .chat-target-name { font-size: 14px; font-weight: 600; }
 .chat-target-status { font-size: 11px; color: var(--success, #10B981); margin-top: 1px; }
 .chat-target-status.offline { color: var(--text-secondary, #6B7280); }
+.header-btn.active { color: var(--primary, #4F46E5); background: var(--surface-3, #F3F4F6); }
 .header-actions { display: flex; gap: 4px; }
 .header-btn {
   width: 34px; height: 34px; border: none; background: transparent; border-radius: 8px;
@@ -411,6 +694,112 @@ defineExpose({ scrollToBottom, setReplyingTo })
 .messages {
   flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px;
 }
+.chat-window-main { flex: 1; display: flex; overflow: hidden; position: relative; }
+.chat-messages-container { flex: 1; display: flex; flex-direction: column; position: relative; overflow: hidden; }
+
+/* 打字提示动画 */
+.typing-indicator {
+  display: flex; gap: 8px; align-items: center; align-self: flex-start;
+  margin: 4px 0 16px 0; animation: typing-in 0.2s ease-out;
+}
+@keyframes typing-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.typing-avatar {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: linear-gradient(135deg, #4F46E5, #7C3AED);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px;
+}
+.typing-bubble {
+  background: #F3F4F6; padding: 8px 12px; border-radius: 16px;
+  border-bottom-left-radius: 4px; display: flex; gap: 4px;
+}
+.typing-bubble .dot {
+  width: 4px; height: 4px; background: #9CA3AF; border-radius: 50%;
+  animation: typing-dots 1.4s infinite ease-in-out both;
+}
+.typing-bubble .dot:nth-child(1) { animation-delay: -0.32s; }
+.typing-bubble .dot:nth-child(2) { animation-delay: -0.16s; }
+@keyframes typing-dots {
+  0%, 80%, 100% { transform: scale(0); }
+  40% { transform: scale(1.0); }
+}
+
+.scroll-bottom-btn {
+  position: absolute; bottom: 20px; right: 20px; padding: 8px 16px;
+  background: var(--primary, #4F46E5); color: white; border: none; border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.3); cursor: pointer;
+  display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; z-index: 10;
+}
+.scroll-bottom-btn svg { width: 14px; height: 14px; }
+
+.chat-sidebar {
+  width: 300px; border-left: 1px solid var(--border, #E5E7EB); background: var(--surface-1, #fff);
+  display: flex; flex-direction: column; z-index: 20;
+}
+.sidebar-header-tabs {
+  display: flex; height: 48px; border-bottom: 1px solid var(--border, #E5E7EB);
+  padding: 0 8px; align-items: center; gap: 4px;
+}
+.sidebar-tab {
+  padding: 0 16px; height: 32px; display: flex; align-items: center;
+  font-size: 13px; font-weight: 500; cursor: pointer; border-radius: 6px;
+  color: var(--text-secondary, #6B7280); transition: all 0.2s;
+}
+.sidebar-tab:hover { background: var(--surface-3, #F3F4F6); }
+.sidebar-tab.active { background: var(--surface-3, #F3F4F6); color: var(--primary, #4F46E5); }
+.close-sidebar-icon {
+  margin-left: auto; width: 28px; height: 28px; border: none; background: none;
+  cursor: pointer; color: var(--text-secondary); border-radius: 4px;
+}
+.close-sidebar-icon:hover { background: var(--surface-3); }
+
+.sidebar-content { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
+.search-content { padding: 12px; }
+.search-input-wrap { margin-bottom: 12px; }
+.search-results { flex: 1; overflow-y: auto; }
+.search-result-item {
+  padding: 12px; border-radius: 8px; cursor: pointer; transition: background 0.2s;
+  border: 1px solid transparent; margin-bottom: 8px;
+}
+.search-result-item:hover { background: var(--surface-2, #F9FAFB); border-color: var(--border); }
+.search-res-header { display: flex; justify-content: space-between; margin-bottom: 4px; font-size: 11px; }
+.search-res-sender { font-weight: 600; color: var(--text-primary); }
+.search-res-time { color: var(--text-muted); }
+.search-res-text { font-size: 12px; color: var(--text-secondary); line-height: 1.5; word-break: break-word; }
+.search-res-text :deep(.highlight) { background: rgba(251, 191, 36, 0.3); color: #B45309; font-weight: 600; border-radius: 2px; }
+
+.jump-highlight { animation: jumpPulse 2s ease-out; }
+@keyframes jumpPulse {
+  0% { background: rgba(79, 70, 229, 0.1); }
+  50% { background: rgba(79, 70, 229, 0.3); }
+  100% { background: transparent; }
+}
+.file-list { flex: 1; overflow-y: auto; padding: 12px; }
+.file-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px;
+  border-radius: 8px; transition: background 0.2s; cursor: default;
+}
+.file-item:hover { background: var(--surface-2, #F9FAFB); }
+.file-icon { font-size: 24px; }
+.file-info { flex: 1; min-width: 0; }
+.file-name { font-size: 13px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-meta { font-size: 11px; color: var(--text-muted, #9CA3AF); margin-top: 2px; }
+.file-download {
+  width: 28px; height: 28px; border: 1px solid var(--border, #E5E7EB); background: white;
+  border-radius: 6px; cursor: pointer; color: var(--text-secondary, #6B7280);
+}
+.file-download:hover { background: var(--primary, #4F46E5); color: white; border-color: var(--primary, #4F46E5); }
+.empty-sidebar { text-align: center; color: var(--text-muted, #9CA3AF); margin-top: 40px; font-size: 13px; }
+
+/* Transitions */
+.fade-enter-active, .fade-leave-active { transition: opacity 0.3s; }
+.fade-enter-from, .fade-leave-to { opacity: 0; }
+
+.slide-right-enter-active, .slide-right-leave-active { transition: transform 0.3s ease; }
+.slide-right-enter-from, .slide-right-leave-to { transform: translateX(100%); }
 .loading-more {
   display: flex; align-items: center; justify-content: center; gap: 6px;
   padding: 8px 0; font-size: 11px; color: var(--text-secondary, #6B7280);
@@ -482,45 +871,72 @@ defineExpose({ scrollToBottom, setReplyingTo })
 /* Obsidian 风格 Markdown 编辑器 */
 .md-editor-wrap {
   flex: 1; border: 1px solid var(--border, #E5E7EB);
-  border-radius: 12px; background: var(--surface-2, #F9FAFB); min-height: 40px;
-  max-height: 200px; overflow-y: auto; transition: border-color 0.15s;
+  border-radius: 12px; background: var(--surface-2, #F9FAFB);
+  max-height: 200px; overflow-y: auto;
+  box-sizing: border-box; display: flex; flex-direction: column;
+  position: relative;
 }
-.md-editor-wrap:focus-within { border-color: var(--primary, #4F46E5); background: white; }
 
-/* 渲染层：未聚焦时显示预览 */
-.md-render-layer {
+/* @ 提及列表样式 */
+.mention-list-popover {
+  position: absolute; bottom: 100%; left: 0; margin-bottom: 8px;
+  width: 180px; max-height: 240px; overflow-y: auto;
+  background: white; border: 1px solid var(--border, #E5E7EB);
+  border-radius: 12px; box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  z-index: 1000; padding: 6px;
+}
+.mention-item {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
+  border-radius: 8px; cursor: pointer; transition: background 0.1s;
+}
+.mention-item:hover, .mention-item.active { background: var(--surface-3, #F3F4F6); }
+.mention-item.active { outline: 1px solid var(--primary); }
+.mention-avatar {
+  width: 24px; height: 24px; border-radius: 50%; display: flex;
+  align-items: center; justify-content: center; font-size: 10px; color: #4F46E5; font-weight: 600;
+}
+.mention-name { font-size: 13px; color: var(--text-primary); font-weight: 500; }
+.md-editor-wrap:focus-within {
+  border-color: var(--primary, #4F46E5);
+  background: white;
+}
+
+/* 渲染层、编辑层与占位符共用基础尺寸样式，确保完全对齐 */
+.md-render-layer, .md-editor, .md-placeholder {
   padding: 8px 12px; font-size: 13px; line-height: 24px;
-  color: var(--text-secondary, #6B7280); white-space: pre-wrap; word-break: break-word;
+  box-sizing: border-box;
   font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
-  min-height: 40px; box-sizing: border-box;
+  word-break: break-word; white-space: pre-wrap;
+  border: none; outline: none; margin: 0; display: block;
+  vertical-align: top;
+}
+
+.md-render-layer {
+  color: var(--text-secondary, #6B7280);
 }
 .md-placeholder {
-  padding: 8px 12px; font-size: 13px; line-height: 24px;
-  color: var(--text-secondary, #6B7280); font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: var(--text-secondary, #6B7280);
 }
 .md-render-layer :deep(.md-line) { line-height: 24px; }
 .md-render-layer :deep(.md-line.empty-line) { height: 24px; }
-.md-render-layer :deep(h1) { font-size: 18px; font-weight: 600; margin: 0; color: var(--text-primary, #111827); }
-.md-render-layer :deep(h2) { font-size: 16px; font-weight: 600; margin: 0; color: var(--text-primary, #111827); }
-.md-render-layer :deep(h3) { font-size: 14px; font-weight: 600; margin: 0; }
+.md-render-layer :deep(h1), .md-render-layer :deep(h2), .md-render-layer :deep(h3) { font-weight: 600; margin: 0; color: var(--text-primary, #111827); }
+.md-render-layer :deep(h1) { font-size: 16px; }
+.md-render-layer :deep(h2) { font-size: 15px; }
+.md-render-layer :deep(h3) { font-size: 14px; }
 .md-render-layer :deep(code) { background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-size: 12px; font-family: monospace; }
 .md-render-layer :deep(pre) { background: rgba(0,0,0,0.08); padding: 8px; border-radius: 6px; overflow-x: auto; margin: 4px 0; }
 .md-render-layer :deep(pre code) { background: none; padding: 0; }
-.md-render-layer :deep(p) { margin: 0 0 4px 0; }
-.md-render-layer :deep(p:last-child) { margin-bottom: 0; }
+.md-render-layer :deep(p) { margin: 0; }
 .md-render-layer :deep(strong) { font-weight: 600; color: var(--text-primary, #111827); }
 .md-render-layer :deep(em) { font-style: italic; }
 .md-render-layer :deep(a) { color: var(--primary, #4F46E5); text-decoration: underline; }
-.md-render-layer :deep(ul), .md-render-layer :deep(ol) { margin: 0 0 4px 0; padding-left: 20px; }
+.md-render-layer :deep(ul), .md-render-layer :deep(ol) { margin: 0; padding-left: 20px; }
 .md-render-layer :deep(blockquote) { margin: 0; padding-left: 8px; color: var(--text-secondary); border-left: 2px solid var(--primary); }
 
 /* 编辑层 textarea */
 .md-editor {
-  width: 100%; min-height: 40px; padding: 8px 12px; font-size: 13px;
-  font-family: 'PingFang SC', 'Microsoft YaHei', monospace; line-height: 24px;
-  color: var(--text-primary, #111827); background: transparent; border: none; outline: none; resize: none;
-  overflow-y: auto; white-space: pre-wrap; word-break: break-word;
-  box-sizing: border-box;
+  width: 100%; color: var(--text-primary, #111827); background: transparent;
+  border: none; outline: none; resize: none; overflow: hidden;
 }
 .md-editor::placeholder {
   color: var(--text-secondary, #6B7280) !important;

@@ -22,13 +22,15 @@ import org.springframework.web.socket.*;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Slf4j
 @Component
 public class WsHandler implements WebSocketHandler {
-    private final Map<Long, WebSocketSession> onlineUsers = new ConcurrentHashMap<>();
+    private static final Map<Long, Set<WebSocketSession>> onlineUsers = new ConcurrentHashMap<>();
+
 
     @Value("${spring.application.name:im-server}")
     private String serverId;
@@ -47,6 +49,13 @@ public class WsHandler implements WebSocketHandler {
     private ApplicationEventPublisher eventPublisher;
     @Autowired
     private OnlineUserService onlineUserService;
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.wujie.im.service.FriendService friendService;
+
+    public static int getOnlineUserCount() {
+        return onlineUsers.size();
+    }
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
@@ -107,10 +116,11 @@ public class WsHandler implements WebSocketHandler {
             }
             Long userId = jwtUtil.getUserId(token);
             log.debug("WebSocket认证成功: userId={}, sessionId={}", userId, session.getId());
-            onlineUsers.put(userId, session);
+            onlineUsers.computeIfAbsent(userId, k -> java.util.Collections.synchronizedSet(new java.util.HashSet<>())).add(session);
             session.getAttributes().put("userId", userId);
             onlineUserService.setOnline(userId, serverId);
             userService.updateStatus(userId, "ONLINE");
+            notifyFriendsStatusChange(userId, "ONLINE");
             session.sendMessage(new TextMessage("{\"type\":\"auth\",\"data\":{\"code\":200,\"msg\":\"认证成功\"}}"));
             // 认证成功后，发送未读会话同步消息
             syncUnreadConversations(userId);
@@ -186,28 +196,28 @@ public class WsHandler implements WebSocketHandler {
 
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) throws Exception {
-        log.error("WebSocket传输错误: {}", exception.getMessage());
-        Long userId = (Long) session.getAttributes().get("userId");
-        if (userId != null) {
-            WebSocketSession currentSession = onlineUsers.get(userId);
-            if (session.equals(currentSession)) {
-                onlineUsers.remove(userId);
-                onlineUserService.setOffline(userId);
-                userService.updateStatus(userId, "OFFLINE");
-            }
-        }
+        log.error("WebSocket传输错误: sessionId={}, error={}", session.getId(), exception.getMessage());
+        removeSession(session);
     }
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus closeStatus) throws Exception {
         log.debug("WebSocket连接关闭: sessionId={}, status={}", session.getId(), closeStatus);
+        removeSession(session);
+    }
+
+    private void removeSession(WebSocketSession session) {
         Long userId = (Long) session.getAttributes().get("userId");
         if (userId != null) {
-            WebSocketSession currentSession = onlineUsers.get(userId);
-            if (session.equals(currentSession)) {
-                onlineUsers.remove(userId);
-                onlineUserService.setOffline(userId);
-                userService.updateStatus(userId, "OFFLINE");
+            Set<WebSocketSession> sessions = onlineUsers.get(userId);
+            if (sessions != null) {
+                sessions.remove(session);
+                if (sessions.isEmpty()) {
+                    onlineUsers.remove(userId);
+                    onlineUserService.setOffline(userId);
+                    userService.updateStatus(userId, "OFFLINE");
+                    notifyFriendsStatusChange(userId, "OFFLINE");
+                }
             }
         }
     }
@@ -217,17 +227,36 @@ public class WsHandler implements WebSocketHandler {
         return false;
     }
 
+    private void notifyFriendsStatusChange(Long userId, String status) {
+        try {
+            List<Long> friendIds = friendService.getFriendIds(userId);
+            String message = JSONUtil.toJsonStr(Map.of(
+                    "type", "user_status",
+                    "data", Map.of("userId", userId, "status", status)
+            ));
+            for (Long friendId : friendIds) {
+                sendToUser(friendId, message);
+            }
+        } catch (Exception e) {
+            log.error("通知好友状态变更失败: userId={}", userId, e);
+        }
+    }
+
     public void sendToUser(Long userId, String message) {
-        WebSocketSession session = onlineUsers.get(userId);
-        if (session != null && session.isOpen()) {
-            try {
-                session.sendMessage(new TextMessage(message));
-                log.debug("sendToUser: SUCCESS sent to userId={}", userId);
-            } catch (IOException e) {
-                log.error("发送WebSocket消息失败: userId={}", userId, e);
+        Set<WebSocketSession> sessions = onlineUsers.get(userId);
+        if (sessions != null && !sessions.isEmpty()) {
+            for (WebSocketSession session : sessions) {
+                if (session.isOpen()) {
+                    try {
+                        session.sendMessage(new TextMessage(message));
+                        log.debug("sendToUser: SUCCESS sent to userId={}, sessionId={}", userId, session.getId());
+                    } catch (IOException e) {
+                        log.error("发送WebSocket消息失败: userId={}, sessionId={}", userId, session.getId(), e);
+                    }
+                }
             }
         } else {
-            log.debug("sendToUser: user not online or session null, userId={}", userId);
+            log.debug("sendToUser: user not online or sessions empty, userId={}", userId);
         }
     }
 

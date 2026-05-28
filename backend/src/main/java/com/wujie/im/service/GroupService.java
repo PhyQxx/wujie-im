@@ -23,6 +23,38 @@ public class GroupService {
     private GroupJoinRequestMapper groupJoinRequestMapper;
     @Autowired
     private UserMapper userMapper;
+    @Autowired
+    private org.redisson.api.RedissonClient redissonClient;
+
+    private static final String GROUP_INVITE_PREFIX = "group_invite:";
+
+    public String generateInviteToken(Long groupId, Long operatorId) {
+        GroupMember member = getMemberRole(groupId, operatorId);
+        if (member == null) throw new RuntimeException("非群成员无法生成邀请链接");
+        
+        String token = java.util.UUID.randomUUID().toString().replace("-", "");
+        redissonClient.getBucket(GROUP_INVITE_PREFIX + token).set(groupId, 7, java.util.concurrent.TimeUnit.DAYS);
+        return token;
+    }
+
+    @Transactional
+    public void joinByInviteToken(String token, Long userId) {
+        Object groupIdObj = redissonClient.getBucket(GROUP_INVITE_PREFIX + token).get();
+        if (groupIdObj == null) throw new RuntimeException("邀请链接已失效");
+        
+        Long groupId = Long.valueOf(groupIdObj.toString());
+        // 检查是否已在群中
+        GroupMember existing = getMemberRole(groupId, userId);
+        if (existing != null) return;
+
+        GroupMember member = new GroupMember();
+        member.setGroupId(groupId);
+        member.setUserId(userId);
+        member.setRole("MEMBER");
+        groupMemberMapper.insert(member);
+        
+        log.info("用户 {} 通过邀请链接加入群组 {}", userId, groupId);
+    }
 
     public GroupInfo createGroup(String name, String avatar, String type, Long ownerId) {
         GroupInfo group = new GroupInfo();
@@ -247,9 +279,61 @@ public class GroupService {
         groupInfoMapper.deleteById(groupId);
     }
 
+    @Transactional
+    public void muteGroup(Long groupId, boolean mute, Long operatorId) {
+        GroupMember operator = getMemberRole(groupId, operatorId);
+        if (operator == null || (!"OWNER".equals(operator.getRole()) && !"ADMIN".equals(operator.getRole()))) {
+            throw new RuntimeException("无权限操作");
+        }
+        GroupInfo group = groupInfoMapper.selectById(groupId);
+        group.setMuteAll(mute ? 1 : 0);
+        groupInfoMapper.updateById(group);
+    }
+
+    @Transactional
+    public void pinMessage(Long groupId, Long messageId, Long operatorId) {
+        GroupMember operator = getMemberRole(groupId, operatorId);
+        if (operator == null || (!"OWNER".equals(operator.getRole()) && !"ADMIN".equals(operator.getRole()))) {
+            throw new RuntimeException("无权限操作");
+        }
+        GroupInfo group = groupInfoMapper.selectById(groupId);
+        group.setPinnedMessageId(messageId);
+        groupInfoMapper.updateById(group);
+    }
+
+    @Transactional
+    public void transferOwnership(Long groupId, Long newOwnerId, Long operatorId) {
+        GroupInfo group = groupInfoMapper.selectById(groupId);
+        if (!group.getOwnerId().equals(operatorId)) {
+            throw new RuntimeException("只有原群主可以转让群");
+        }
+        
+        GroupMember oldOwner = getMemberRole(groupId, operatorId);
+        GroupMember newOwner = getMemberRole(groupId, newOwnerId);
+        if (newOwner == null) throw new RuntimeException("新群主不在群中");
+
+        oldOwner.setRole("MEMBER");
+        newOwner.setRole("OWNER");
+        groupMemberMapper.updateById(oldOwner);
+        groupMemberMapper.updateById(newOwner);
+
+        group.setOwnerId(newOwnerId);
+        groupInfoMapper.updateById(group);
+    }
+
     public boolean isMuted(Long groupId, Long userId) {
+        GroupInfo group = groupInfoMapper.selectById(groupId);
         GroupMember member = getMemberRole(groupId, userId);
         if (member == null) return false;
+
+        // 全体禁言检查（管理员和群主豁免）
+        if (group.getMuteAll() != null && group.getMuteAll() == 1) {
+            if (!"OWNER".equals(member.getRole()) && !"ADMIN".equals(member.getRole())) {
+                return true;
+            }
+        }
+
+        // 个人禁言检查
         if (member.getMuted() != null && member.getMuted() == 1) {
             if (member.getMutedUntil() != null && member.getMutedUntil().isBefore(LocalDateTime.now())) {
                 member.setMuted(0);

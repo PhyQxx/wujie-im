@@ -28,6 +28,7 @@ const router = createRouter({
         { path: '/admin/system', name: 'AdminSystem', component: () => import('@/views/AdminDashboard.vue'), meta: { adminTab: 'system', requiresAdmin: true } },
         // 其他
         { path: '/group/:id', name: 'GroupDetail', component: () => import('@/views/GroupDetail.vue') },
+        { path: '/join/group/:token', name: 'JoinGroupByToken', component: () => import('@/views/JoinGroup.vue') },
         { path: '/robot/:id/config', name: 'RobotConfig', component: () => import('@/views/RobotConfig.vue') }
       ]
     }

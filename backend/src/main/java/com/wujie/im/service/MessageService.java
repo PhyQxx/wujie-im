@@ -1,14 +1,21 @@
 package com.wujie.im.service;
 
 import cn.hutool.json.JSONUtil;
+import cn.hutool.json.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.wujie.im.entity.*;
 import com.wujie.im.mapper.*;
 import com.wujie.im.websocket.WsHandler;
-import com.wujie.im.service.ConversationService;
+import com.wujie.im.event.MessageSentEvent;
+import com.wujie.im.event.MessageRecalledEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Slf4j
@@ -17,24 +24,32 @@ public class MessageService {
     @Autowired
     private MessageMapper messageMapper;
     @Autowired
-    private MessageReadMapper messageReadMapper;
-    @Autowired
     private ConversationMapper conversationMapper;
+    @Autowired
+    private MessageReadMapper messageReadMapper;
     @Autowired
     private GroupMemberMapper groupMemberMapper;
     @Autowired
-    @org.springframework.context.annotation.Lazy
     private WsHandler wsHandler;
     @Autowired
-    @org.springframework.context.annotation.Lazy
     private ConversationService conversationService;
+    @Autowired
+    private GroupService groupService;
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
     @Autowired
     private UserMapper userMapper;
     @Autowired
     @org.springframework.context.annotation.Lazy
     private RobotMessageHandler robotMessageHandler;
+    @Autowired
+    private com.wujie.im.util.SensitiveWordFilter sensitiveWordFilter;
 
     public Message sendMessage(Long senderId, Long conversationId, String content, String contentType) {
+        // 敏感词过滤
+        if ("TEXT".equals(contentType) || contentType == null) {
+            content = sensitiveWordFilter.filter(content);
+        }
         return sendMessage(senderId, conversationId, content, contentType, null, null);
     }
 
@@ -42,54 +57,38 @@ public class MessageService {
         return sendMessage(senderId, conversationId, content, contentType, metaStr, null);
     }
 
+    @Transactional
     public Message sendMessage(Long senderId, Long conversationId, String content, String contentType, String metaStr, Long replyId) {
-        // 检查群聊禁言
-        Conversation conv = conversationMapper.selectById(conversationId);
-        if (conv != null && "GROUP".equals(conv.getType())) {
-            GroupMember member = groupMemberMapper.selectOne(
-                    new LambdaQueryWrapper<GroupMember>()
-                            .eq(GroupMember::getGroupId, conv.getTypeId())
-                            .eq(GroupMember::getUserId, senderId)
-            );
-            if (member != null && member.getMuted() != null && member.getMuted() == 1) {
-                throw new RuntimeException("您已被禁言");
-            }
-        }
-
         Message msg = new Message();
         msg.setConversationId(conversationId);
         msg.setSenderId(senderId);
         msg.setContent(content);
         msg.setContentType(contentType != null ? contentType : "TEXT");
         msg.setMeta(metaStr);
-        msg.setReplyId(replyId);
         msg.setStatus("SENT");
+        msg.setReplyId(replyId);
+        msg.setRecall(0);
         messageMapper.insert(msg);
 
-        // 更新会话最后消息
-        String lastContent = extractPreviewContent(content);
-        conversationMapper.update(null,
-                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Conversation>()
-                        .eq(Conversation::getId, conversationId)
-                        .set(Conversation::getLastMessageId, msg.getId())
-                        .set(Conversation::getLastMessageContent, lastContent)
-                        .set(Conversation::getLastMessageTime, msg.getCreateTime())
-        );
+        // 更新会话最后一条消息
+        Conversation conv = conversationMapper.selectById(conversationId);
+        if (conv != null) {
+            conv.setLastMessageId(msg.getId());
+            conv.setLastMessageContent(extractPreviewContent(content));
+            conv.setLastMessageTime(msg.getCreateTime());
+            conversationMapper.updateById(conv);
 
-        // 更新发送者的未读数为0（发送消息后该会话对自己已读）
-        conversationMapper.update(null,
-                new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<Conversation>()
-                        .eq(Conversation::getId, conversationId)
-                        .eq(Conversation::getUserId, senderId)
-                        .set(Conversation::getUnreadCount, 0)
-        );
+            // 清零发送者的未读数
+            markAsRead(senderId, conversationId, msg.getId());
 
-        // 推送消息给会话成员（每个成员收到自己的conversationId），并更新未读计数
-        pushMessageToConversation(conv, msg, senderId);
+            // 处理推送 (通过事件解耦)
+            eventPublisher.publishEvent(new MessageSentEvent(this, msg, conv, senderId));
+        }
+
         return msg;
     }
 
-    @org.springframework.scheduling.annotation.Async
+    @Async
     public void pushMessageToConversationAsync(Conversation conv, Message msg, Long excludeUserId) {
         pushMessageToConversation(conv, msg, excludeUserId);
     }
@@ -97,81 +96,98 @@ public class MessageService {
     private void pushMessageToConversation(Conversation conv, Message msg, Long excludeUserId) {
         if (conv == null) return;
 
+        // 获取发送者名称用于通知
+        String senderName = null;
+        User senderUser = userMapper.selectById(msg.getSenderId());
+        if (senderUser != null) {
+            senderName = senderUser.getUsername();
+        }
+
         if ("SINGLE".equals(conv.getType())) {
             Long otherUserId = conv.getTypeId();
             if (!otherUserId.equals(excludeUserId)) {
-                // 获取接收者(B)的会话ID，用于推送和更新未读
                 Conversation otherConv = conversationService.getOrCreateSingleConversation(otherUserId, excludeUserId);
-                // 增加接收者的未读计数
                 incrementUnreadCount(otherUserId, otherConv.getId());
-                // 构造推送消息，使用接收者的会话ID
-                Message pushMsg = new Message();
-                pushMsg.setId(msg.getId());
-                pushMsg.setConversationId(otherConv.getId());
-                pushMsg.setSenderId(msg.getSenderId());
-                pushMsg.setContent(msg.getContent());
-                pushMsg.setContentType(msg.getContentType());
-                pushMsg.setMeta(msg.getMeta());
-                pushMsg.setStatus(msg.getStatus());
-                pushMsg.setReplyId(msg.getReplyId());
-                pushMsg.setCreateTime(msg.getCreateTime());
-                pushMsg.setRecall(msg.getRecall());
+                
+                Message pushMsg = createPushMessage(msg, otherConv.getId(), senderName);
                 wsHandler.sendToUser(otherUserId, "message", pushMsg);
 
-                // 检测接收者是否为机器人虚拟用户
+                // 检测是否为机器人
                 User otherUser = userMapper.selectById(otherUserId);
                 if (otherUser != null && "ROBOT".equals(otherUser.getRole())) {
                     robotMessageHandler.handlePrivateChat(otherUserId, excludeUserId, msg.getContent());
                 }
             }
+            msg.setSenderName(senderName);
             wsHandler.sendToUser(excludeUserId, "message", msg);
         } else if ("GROUP".equals(conv.getType())) {
             List<GroupMember> members = groupMemberMapper.selectList(
                     new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getGroupId, conv.getTypeId())
             );
             for (GroupMember m : members) {
-                // 每个成员用各自的conversationId
                 Conversation memberConv = conversationService.getOrCreateGroupConversation(m.getUserId(), conv.getTypeId());
-                Message pushMsg = new Message();
-                pushMsg.setId(msg.getId());
-                pushMsg.setConversationId(memberConv.getId());
-                pushMsg.setSenderId(msg.getSenderId());
-                pushMsg.setContent(msg.getContent());
-                pushMsg.setContentType(msg.getContentType());
-                pushMsg.setMeta(msg.getMeta());
-                pushMsg.setStatus(msg.getStatus());
-                pushMsg.setReplyId(msg.getReplyId());
-                pushMsg.setCreateTime(msg.getCreateTime());
-                pushMsg.setRecall(msg.getRecall());
+                Message pushMsg = createPushMessage(msg, memberConv.getId(), senderName);
 
                 if (!m.getUserId().equals(excludeUserId)) {
-                    // 增加接收者的未读计数
                     incrementUnreadCount(m.getUserId(), memberConv.getId());
                     wsHandler.sendToUser(m.getUserId(), "message", pushMsg);
+                    checkAndPushMention(m.getUserId(), msg, senderName);
                 } else {
                     wsHandler.sendToUser(excludeUserId, "message", pushMsg);
                 }
             }
 
-            // 检测群成员中是否有机器人，触发自动回复
+            // 检测机器人自动回复
             for (GroupMember m : members) {
                 if (m.getUserId().equals(excludeUserId)) continue;
                 User memberUser = userMapper.selectById(m.getUserId());
                 if (memberUser != null && "ROBOT".equals(memberUser.getRole())) {
-                    // 检测是否@了机器人（通过meta中的mentionedUserIds）
-                    boolean isMentioned = false;
-                    if (msg.getMeta() != null) {
-                        try {
-                            cn.hutool.json.JSONObject metaJson = cn.hutool.json.JSONUtil.parseObj(msg.getMeta());
-                            cn.hutool.json.JSONArray mentioned = metaJson.getJSONArray("mentionedUserIds");
-                            if (mentioned != null && mentioned.contains(m.getUserId())) {
-                                isMentioned = true;
-                            }
-                        } catch (Exception ignored) {}
-                    }
+                    boolean isMentioned = isUserMentioned(msg, m.getUserId());
                     robotMessageHandler.handleGroupChat(m.getUserId(), conv.getTypeId(), excludeUserId, msg.getContent(), isMentioned);
                 }
             }
+        }
+    }
+
+    private Message createPushMessage(Message msg, Long conversationId, String senderName) {
+        Message pushMsg = new Message();
+        pushMsg.setId(msg.getId());
+        pushMsg.setConversationId(conversationId);
+        pushMsg.setSenderId(msg.getSenderId());
+        pushMsg.setSenderName(senderName);
+        pushMsg.setContent(msg.getContent());
+        pushMsg.setContentType(msg.getContentType());
+        pushMsg.setMeta(msg.getMeta());
+        pushMsg.setStatus(msg.getStatus());
+        pushMsg.setReplyId(msg.getReplyId());
+        pushMsg.setCreateTime(msg.getCreateTime());
+        pushMsg.setRecall(msg.getRecall());
+        return pushMsg;
+    }
+
+    private boolean isUserMentioned(Message msg, Long userId) {
+        if (msg.getMeta() == null) return false;
+        try {
+            JSONObject meta = JSONUtil.parseObj(msg.getMeta());
+            if (meta.getBool("atAll", false)) return true;
+            List<Long> atUserIds = JSONUtil.toList(meta.getJSONArray("atUserIds"), Long.class);
+            return atUserIds != null && atUserIds.contains(userId);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private void checkAndPushMention(Long targetUserId, Message msg, String senderName) {
+        if (isUserMentioned(msg, targetUserId)) {
+            Map<String, Object> atNotif = new HashMap<>();
+            atNotif.put("type", "mention");
+            atNotif.put("data", Map.of(
+                "messageId", msg.getId(),
+                "conversationId", msg.getConversationId(),
+                "senderName", senderName != null ? senderName : "有人",
+                "content", msg.getContent()
+            ));
+            wsHandler.sendToUser(targetUserId, JSONUtil.toJsonStr(atNotif));
         }
     }
 
@@ -199,15 +215,12 @@ public class MessageService {
     }
 
     public List<Message> getGroupMessages(Long groupId, Long beforeId, int limit) {
-        // 查找该群所有成员的会话
         List<Conversation> convs = conversationMapper.selectList(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Conversation>()
                         .eq(Conversation::getType, "GROUP")
                         .eq(Conversation::getTypeId, groupId)
         );
         if (convs.isEmpty()) return Collections.emptyList();
-
-        // 收集所有conversationId
         List<Long> convIds = convs.stream().map(Conversation::getId).toList();
 
         LambdaQueryWrapper<Message> q = new LambdaQueryWrapper<Message>()
@@ -235,6 +248,16 @@ public class MessageService {
         List<Message> msgs = messageMapper.selectList(q);
         Collections.reverse(msgs);
         return msgs;
+    }
+
+    public List<Message> searchMessages(Long conversationId, String keyword) {
+        return messageMapper.selectList(
+                new LambdaQueryWrapper<Message>()
+                        .eq(Message::getConversationId, conversationId)
+                        .like(Message::getContent, keyword)
+                        .eq(Message::getRecall, 0)
+                        .orderByDesc(Message::getId)
+        );
     }
 
     public Map<String, Object> getConversationReadStatus(Long conversationId, Long userId) {
@@ -265,7 +288,6 @@ public class MessageService {
             read.setLastReadId(messageId);
             messageReadMapper.updateById(read);
         }
-        // 清零 conversation 表的 unread_count
         Conversation conv = conversationMapper.selectOne(
                 new LambdaQueryWrapper<Conversation>()
                         .eq(Conversation::getId, conversationId)
@@ -275,7 +297,6 @@ public class MessageService {
             conv.setUnreadCount(0);
             conversationMapper.updateById(conv);
         }
-        // 通知消息发送者已读
         Message msg = messageMapper.selectById(messageId);
         if (msg != null) {
             Map<String, Object> pushData = new HashMap<>();
@@ -291,14 +312,36 @@ public class MessageService {
 
     public void recallMessage(Long userId, Long messageId) {
         Message msg = messageMapper.selectById(messageId);
-        if (msg == null) return;
-        if (!msg.getSenderId().equals(userId)) return;
+        if (msg == null) throw new RuntimeException("消息不存在");
+        
+        boolean canRecall = false;
+        if (msg.getSenderId().equals(userId)) {
+            if (msg.getCreateTime().plusMinutes(2).isAfter(LocalDateTime.now())) {
+                canRecall = true;
+            } else {
+                throw new RuntimeException("消息发送已超过2分钟，无法撤回");
+            }
+        } else {
+            Conversation conv = conversationMapper.selectById(msg.getConversationId());
+            if (conv != null && "GROUP".equals(conv.getType())) {
+                GroupMember member = groupMemberMapper.selectOne(
+                        new LambdaQueryWrapper<GroupMember>()
+                                .eq(GroupMember::getGroupId, conv.getTypeId())
+                                .eq(GroupMember::getUserId, userId)
+                );
+                if (member != null && ("OWNER".equals(member.getRole()) || "ADMIN".equals(member.getRole()))) {
+                    canRecall = true;
+                }
+            }
+        }
+
+        if (!canRecall) throw new RuntimeException("无权撤回该消息");
 
         msg.setRecall(1);
         msg.setStatus("RECALLED");
+        msg.setContent("消息已撤回");
         messageMapper.updateById(msg);
 
-        // 通知会话中的其他成员
         Conversation conv = conversationMapper.selectById(msg.getConversationId());
         if (conv != null) {
             String pushJson = JSONUtil.toJsonStr(Map.of(
@@ -321,10 +364,8 @@ public class MessageService {
         wsHandler.sendToUser(userId, JSONUtil.toJsonStr(Map.of("type", "message_recalled", "data", messageId)));
     }
 
-    // 从消息内容中提取预览文本（支持图文混合内容的预览）
     private String extractPreviewContent(String content) {
         if (content == null) return null;
-        // 如果是 JSON 数组，提取第一个文本块的内容
         if (content.startsWith("[")) {
             try {
                 cn.hutool.json.JSONArray arr = JSONUtil.parseArray(content);
@@ -337,11 +378,8 @@ public class MessageService {
                         }
                     }
                 }
-                // 没有文本块，返回 [图片] 等描述
                 return "[图片消息]";
-            } catch (Exception e) {
-                // 解析失败，截断原始内容
-            }
+            } catch (Exception e) { /* ignored */ }
         }
         return content.length() > 50 ? content.substring(0, 50) : content;
     }

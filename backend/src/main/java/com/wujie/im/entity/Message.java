@@ -17,6 +17,8 @@ public class Message {
     private String status;
     private Integer recall;
     private Long replyId;
+    @TableField(exist = false)
+    private String senderName;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     @TableField(fill = FieldFill.INSERT_UPDATE)

@@ -1,5 +1,5 @@
 <template>
-  <div class="message-row" :class="[isMine ? 'outgoing' : 'incoming', { ai: isAiMessage }]">
+  <div class="message-row" :class="[isMine ? 'outgoing' : 'incoming', { ai: isAiMessage, mention: isMentionedMe }]">
     <div class="msg-avatar" :style="avatarStyle">{{ avatarText }}</div>
     <div class="msg-body">
       <div v-if="showSenderName" class="msg-sender">
@@ -17,7 +17,7 @@
           <!-- 混合内容（图文混合） -->
           <template v-if="contentBlocks.length > 1">
             <div v-for="(block, idx) in contentBlocks" :key="idx" class="content-block">
-              <div v-if="block.type === 'text'" class="text-msg" v-html="renderMarkdown(block.content)" />
+              <div v-if="block.type === 'text'" class="text-msg" v-html="renderMarkdown(block.content)" @click="handleContentClick" />
               <div v-else-if="block.type === 'image'" class="image-msg">
                 <el-image :src="block.url" :preview-src-list="[block.url]" fit="cover" class="msg-image" preview-teleported>
                   <template #placeholder>
@@ -60,11 +60,12 @@
           <!-- 系统消息 -->
           <div v-else-if="message.contentType === 'SYSTEM'" class="system-msg">{{ message.content }}</div>
           <!-- 纯文本/Markdown -->
-          <div v-else class="text-msg" v-html="renderMarkdown(message.content)" />
+          <div v-else class="text-msg" v-html="renderMarkdown(message.content)" @click="handleContentClick" />
         </template>
       </div>
       <div class="msg-actions">
         <button v-if="!message.recall" class="msg-action-btn" @click="$emit('reply', message)" title="回复">↩</button>
+        <button v-if="canRecall" class="msg-action-btn recall-btn" @click="handleRecall" title="撤回">✕</button>
       </div>
       <div class="msg-time">
         {{ formatTime(message.createTime) }}
@@ -81,20 +82,51 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, toRef } from 'vue'
 import dayjs from 'dayjs'
 import { marked } from 'marked'
+import { useConversationStore } from '@/stores/conversation'
+import { useMessageStore } from '@/stores/message'
+import { useUserStore } from '@/stores/user'
+import { useGroupStore } from '@/stores/group'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Message } from '@/types'
 
 marked.setOptions({ breaks: true })
 
 const props = defineProps<{ message: Message; isMine: boolean }>()
-defineEmits<{ reply: [msg: Message] }>()
+const emit = defineEmits<{ reply: [msg: Message] }>()
+
+const message = toRef(props, 'message')
+const conversationStore = useConversationStore()
+const messageStore = useMessageStore()
+const userStore = useUserStore()
+const groupStore = useGroupStore()
 
 const showSenderName = computed(() => !props.isMine && props.message.senderName)
 const senderName = computed(() => props.message.senderName || '用户')
 const isAiMessage = computed(() => props.message.contentType === 'AI')
-const isAtAll = computed(() => props.message.meta?.includes('atAll'))
+
+const isAtAll = computed(() => {
+  if (!props.message.meta) return false
+  try {
+    const meta = typeof props.message.meta === 'string' ? JSON.parse(props.message.meta) : props.message.meta
+    return !!meta.atAll
+  } catch {
+    return props.message.meta.includes('atAll')
+  }
+})
+
+const isMentionedMe = computed(() => {
+  if (props.isMine) return false
+  if (isAtAll.value) return true
+  if (!props.message.meta) return false
+  try {
+    const meta = typeof props.message.meta === 'string' ? JSON.parse(props.message.meta) : props.message.meta
+    const currentUserId = Number(localStorage.getItem('userId'))
+    return Array.isArray(meta.atUserIds) && meta.atUserIds.includes(currentUserId)
+  } catch { return false }
+})
 
 // 解析消息内容为内容块数组
 interface ContentBlock { type: 'text' | 'image'; content?: string; url?: string }
@@ -120,12 +152,82 @@ const isSingleImageBlock = computed(() => {
   return contentBlocks.value.length === 1 && contentBlocks.value[0].type === 'image'
 })
 
+const canRecall = computed(() => {
+  if (message.value.recall) return false
+  
+  // 自己发送的，2分钟内可撤回
+  if (props.isMine) {
+    const createTime = new Date(message.value.createTime).getTime()
+    const now = new Date().getTime()
+    return (now - createTime) < 2 * 60 * 1000
+  }
+
+  // 群主或管理员可撤回任何人消息
+  const conv = conversationStore.conversations.find(c => c.id === message.value.conversationId)
+  if (conv?.type === 'GROUP') {
+    const currentMember = groupStore.members.find(m => m.userId === userStore.currentUser?.id)
+    return currentMember?.role === 'OWNER' || currentMember?.role === 'ADMIN'
+  }
+  
+  return false
+})
+
+async function handleRecall() {
+  try {
+    await ElMessageBox.confirm('确定要撤回这条消息吗？', '提示', { type: 'warning' })
+    await messageStore.recallMessage(message.value.id)
+    ElMessage.success('消息已撤回')
+  } catch (e: any) {
+    if (e !== 'cancel') ElMessage.error(e?.message || '撤回失败')
+  }
+}
+
 function renderMarkdown(text: string): string {
   if (!text) return ''
   try {
-    return marked.parse(text) as string
+    let html = marked.parse(text) as string
+    
+    // 高亮 @ 提及
+    html = html.replace(/@([^\s@<>]+)/g, '<span class="mention-tag">@$1</span>')
+
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(html, 'text/html')
+    const preBlocks = doc.querySelectorAll('pre')
+    
+    preBlocks.forEach(pre => {
+      const code = pre.querySelector('code')
+      if (code) {
+        if ((window as any).hljs) {
+          (window as any).hljs.highlightElement(code)
+        }
+        pre.style.position = 'relative'
+        const btn = doc.createElement('button')
+        btn.className = 'copy-code-btn'
+        btn.setAttribute('data-code', code.innerText)
+        btn.innerHTML = '复制'
+        pre.appendChild(btn)
+      }
+    })
+    return doc.body.innerHTML
   } catch {
     return text
+  }
+}
+
+function handleContentClick(e: MouseEvent) {
+  const target = e.target as HTMLElement
+  if (target.classList.contains('copy-code-btn')) {
+    const code = target.getAttribute('data-code')
+    if (code) {
+      navigator.clipboard.writeText(code)
+      const oldText = target.innerHTML
+      target.innerHTML = '已复制'
+      target.classList.add('copied')
+      setTimeout(() => {
+        target.innerHTML = oldText
+        target.classList.remove('copied')
+      }, 2000)
+    }
   }
 }
 
@@ -199,6 +301,18 @@ function formatTime(time: string) {
   flex-direction: column;
   gap: 2px;
 }
+.message-row.mention .msg-bubble .text-msg {
+  background: #FFFBEB !important;
+  border: 1px solid #FEF3C7;
+}
+.text-msg :deep(.mention-tag) {
+  color: var(--primary);
+  font-weight: 600;
+  background: rgba(79, 70, 229, 0.1);
+  padding: 0 4px;
+  border-radius: 4px;
+}
+
 .msg-sender {
   font-size: 11px;
   color: var(--text-secondary);
@@ -336,10 +450,24 @@ function formatTime(time: string) {
 .content-block .text-msg { line-height: 1.5; }
 /* Markdown 样式 */
 .text-msg :deep(a) { color: inherit; text-decoration: underline; }
-.text-msg :deep(code) { background: rgba(0,0,0,0.08); padding: 1px 4px; border-radius: 3px; font-size: 12px; font-family: monospace; }
-.text-msg :deep(pre) { background: rgba(0,0,0,0.08); padding: 8px; border-radius: 6px; overflow-x: auto; margin: 4px 0; }
-.text-msg :deep(pre code) { background: none; padding: 0; }
+.text-msg :deep(code) { background: rgba(0,0,0,0.08); padding: 2px 4px; border-radius: 4px; font-size: 12px; font-family: 'Fira Code', monospace; }
+.text-msg :deep(pre) { background: #1E1E1E; color: #D4D4D4; padding: 12px; border-radius: 8px; overflow-x: auto; margin: 8px 0; position: relative; }
+.text-msg :deep(pre code) { background: none; padding: 0; font-size: 12px; line-height: 1.6; }
+.text-msg :deep(.copy-code-btn) {
+  position: absolute; top: 8px; right: 8px; padding: 2px 8px; font-size: 10px;
+  background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2);
+  color: #A9A9A9; border-radius: 4px; cursor: pointer; transition: all 0.2s;
+}
+.text-msg :deep(.copy-code-btn:hover) { background: rgba(255,255,255,0.2); color: white; }
+.text-msg :deep(.copy-code-btn.copied) { background: #10B981; color: white; border-color: #10B981; }
 .text-msg :deep(strong) { font-weight: 600; }
 .text-msg :deep(p) { margin: 0 0 4px 0; }
 .text-msg :deep(p:last-child) { margin-bottom: 0; }
+.text-msg :deep(ul), .text-msg :deep(ol) { 
+  margin: 4px 0; 
+  padding-left: 20px; 
+  list-style-position: outside;
+}
+.text-msg :deep(li) { margin-bottom: 2px; }
+.text-msg :deep(li:last-child) { margin-bottom: 0; }
 </style>

@@ -38,6 +38,7 @@ public class Constants {
     public static final String AI_MINIMAX = "MINIMAX";
     public static final String AI_GLM = "GLM";
     public static final String AI_DEEPSEEK = "DEEPSEEK";
+    public static final String AI_CUSTOM = "CUSTOM";
 
     public static final String NOTIF_FRIEND_REQUEST = "FRIEND_REQUEST";
     public static final String NOTIF_GROUP_JOIN_REQUEST = "GROUP_JOIN_REQUEST";

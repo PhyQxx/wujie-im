@@ -9,8 +9,10 @@
 | 前端 | Vue 3.4 + Vite 5 + TypeScript + Element Plus + Pinia |
 | 后端 | SpringBoot 3.2.0 + MyBatis-Plus 3.5 |
 | 数据库 | MySQL + Redis (Redisson) |
+| 文件存储 | Minio / FTP |
 | 实时通信 | WebSocket |
 | 认证授权 | JWT (Access Token 15分钟 + Refresh Token 7天) |
+| 安全加密 | AES-256-CBC 接口级加解密 |
 | AI 集成 | MiniMax / GLM / DeepSeek (策略模式) |
 
 ## 功能特性
@@ -23,6 +25,7 @@
 - 实时 WebSocket 消息收发
 - 消息撤回与已读状态
 - 单聊与群聊支持
+- **消息安全**：核心接口数据采用 AES-256-CBC 加密传输
 
 ### 群聊功能
 - 创建群聊、群成员管理
@@ -33,13 +36,19 @@
 - 策略模式实现多 AI 切换
 - 与 AI 机器人对话
 
+### 文件管理
+- 支持图片与文件上传
+- 集成 Minio 对象存储
+- 支持可选的 FTP 存储方案
+
 ### 管理员后台
 - 用户管理
 - 系统监控
 
-### 通知系统
-- 实时通知推送
-- 通知状态管理
+### 系统安全与优化
+- **API 限流**：基于 Redisson 的分布式限流保护
+- **敏感词过滤**：内置敏感词识别（待深入集成）
+- 实时通知推送与状态管理
 
 ## 环境要求
 
@@ -47,6 +56,7 @@
 - JDK 17+
 - MySQL 8.0+
 - Redis 6.0+
+- Minio (可选，用于文件存储)
 
 ## 快速开始
 
@@ -56,6 +66,7 @@
 cd frontend
 npm install          # 安装依赖
 npm run dev          # 启动开发服务器 (http://localhost:3000)
+npm run test         # 运行单元测试
 npm run build        # 生产环境构建
 npm run preview      # 预览生产构建
 ```
@@ -65,17 +76,18 @@ npm run preview      # 预览生产构建
 ```bash
 cd backend
 mvn clean package    # 构建 JAR 包
+mvn test             # 运行单元测试
 mvn spring-boot:run  # 直接运行
 ```
 
 ### 配置说明
 
 **前端配置** (`frontend/vite.config.ts`):
-- 开发代理: `/api` → `localhost:18092`
-- WebSocket 代理: `/ws` → `ws://localhost:18092`
+- 开发代理: `/api` → `localhost:19082`
+- WebSocket 代理: `/ws` → `ws://localhost:19082`
 
 **后端配置** (`backend/src/main/resources/application.yml`):
-- 服务端口: `18092`
+- 服务端口: `19082`
 - MySQL: `127.0.0.1:3306`
 - Redis: `127.0.0.1:6379`
 

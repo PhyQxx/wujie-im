@@ -13,6 +13,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 cd frontend
 npm install          # Install dependencies
 npm run dev          # Start dev server on port 3000
+npm run test         # Run unit tests (Vitest)
 npm run build        # Production build
 npm run preview      # Preview production build
 ```
@@ -22,6 +23,7 @@ npm run preview      # Preview production build
 cd backend
 export JAVA_HOME=/home/phy/.jdks/corretto-17.0.18  # Required: Java 17+ for Spring Boot 3.2 Maven plugin
 mvn clean package    # Build JAR
+mvn test             # Run unit tests
 mvn spring-boot:run  # Run directly
 # Requires: MySQL (127.0.0.1:3306), Redis (127.0.0.1:6379)
 ```
@@ -51,6 +53,9 @@ mvn spring-boot:run  # Run directly
 ### Key Patterns
 - **WebSocket Protocol**: JSON messages with `type` field (auth, heartbeat, send_message, read_message, recall_message)
 - **JWT Auth**: Access token (15min) + Refresh token (7d), stored in localStorage on frontend
+- **Message Security**: `MessageCryptoFilter` and `CryptoResponseFilter` handle AES-256-CBC encryption/decryption for `/api/message`, `/api/conversation`, `/api/friend`, and `/api/robot` paths.
+- **API Protection**: `@RateLimit` annotation + `RateLimitInterceptor` using Redisson for distributed rate limiting.
+- **File Storage**: Integrated `MinioService` for file/image uploads; FTP support available as alternative.
 - **AI Integration**: Strategy pattern with MiniMaxService, GlmService, DeepSeekService implementing AiService interface
 - **Real-time Updates**: WebSocket pushed messages + polling for notifications
 

@@ -4,14 +4,20 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.wujie.im.common.Result;
 import com.wujie.im.entity.*;
 import com.wujie.im.mapper.*;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+
+import java.lang.management.ManagementFactory;
+import java.lang.management.MemoryMXBean;
+import java.lang.management.MemoryUsage;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
@@ -35,6 +41,9 @@ public class AdminController {
     private SystemConfigMapper systemConfigMapper;
     @Autowired
     private ConversationMapper conversationMapper;
+    @Autowired
+    private org.redisson.api.RedissonClient redissonClient;
+    
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
     // ==================== 认证 ====================
@@ -85,6 +94,44 @@ public class AdminController {
         stats.put("totalRobots", totalRobots);
         stats.put("todayUsers", todayUsers);
         stats.put("todayMessages", todayMessages);
+
+        // 实时指标
+        stats.put("onlineUsers", com.wujie.im.websocket.WsHandler.getOnlineUserCount());
+        
+        String minuteKey = "stats:requests:minute:" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmm").format(java.time.LocalDateTime.now());
+        long rpm = redissonClient.getAtomicLong(minuteKey).get();
+        stats.put("requestsPerMinute", rpm);
+
+        // 深层监控指标
+        // JVM 内存
+        MemoryMXBean memoryMXBean = ManagementFactory.getMemoryMXBean();
+        MemoryUsage heapUsage = memoryMXBean.getHeapMemoryUsage();
+        stats.put("jvmHeapUsed", heapUsage.getUsed() / 1024 / 1024); // MB
+        stats.put("jvmHeapMax", heapUsage.getMax() / 1024 / 1024); // MB
+        
+            // Redis 状态 (尝试获取基本信息)
+            try {
+                org.redisson.api.NodesGroup<org.redisson.api.Node> nodes = redissonClient.getNodesGroup();
+                int connectedClients = 0;
+                long hits = 0;
+                long misses = 0;
+                for (org.redisson.api.Node node : nodes.getNodes()) {
+                    Map<String, String> clientsInfo = node.info(org.redisson.api.Node.InfoSection.CLIENTS);
+                    connectedClients += Integer.parseInt(clientsInfo.getOrDefault("connected_clients", "0"));
+                    
+                    Map<String, String> statsInfo = node.info(org.redisson.api.Node.InfoSection.STATS);
+                    hits += Long.parseLong(statsInfo.getOrDefault("keyspace_hits", "0"));
+                    misses += Long.parseLong(statsInfo.getOrDefault("keyspace_misses", "0"));
+                }
+                stats.put("redisClients", connectedClients);
+                double hitRate = (hits + misses) == 0 ? 0 : (double) hits / (hits + misses) * 100;
+                stats.put("redisHitRate", String.format("%.2f", hitRate));
+                
+                // 运行时长 (JVM)
+                stats.put("uptime", ManagementFactory.getRuntimeMXBean().getUptime() / 1000); // seconds
+            } catch (Exception e) {
+                log.warn("Failed to get deep stats", e);
+            }
 
         return Result.success(stats);
     }

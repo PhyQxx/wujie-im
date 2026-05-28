@@ -22,6 +22,7 @@ public class RateLimitInterceptor implements HandlerInterceptor {
 
     @Override
     public boolean preHandle(HttpServletRequest request, HttpServletResponse response, Object handler) {
+        trackRequest();
         if (!(handler instanceof HandlerMethod handlerMethod)) {
             return true;
         }
@@ -41,6 +42,17 @@ public class RateLimitInterceptor implements HandlerInterceptor {
         }
 
         return true;
+    }
+
+    private void trackRequest() {
+        try {
+            String minuteKey = "stats:requests:minute:" + java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmm").format(java.time.LocalDateTime.now());
+            org.redisson.api.RAtomicLong minuteCounter = redissonClient.getAtomicLong(minuteKey);
+            minuteCounter.incrementAndGet();
+            minuteCounter.expire(10, java.util.concurrent.TimeUnit.MINUTES);
+        } catch (Exception e) {
+            log.error("Track request failed", e);
+        }
     }
 
     private String getClientIp(HttpServletRequest request) {

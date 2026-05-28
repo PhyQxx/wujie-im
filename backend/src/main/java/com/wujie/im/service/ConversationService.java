@@ -39,6 +39,11 @@ public class ConversationService {
     }
 
     public Conversation getOrCreateSingleConversation(Long userId, Long otherUserId) {
+        if (userId == null || otherUserId == null) {
+            log.error("getOrCreateSingleConversation failed: userId={}, otherUserId={}", userId, otherUserId);
+            throw new RuntimeException("参数缺失，无法创建会话");
+        }
+
         List<Conversation> list = conversationMapper.selectList(
                 new LambdaQueryWrapper<Conversation>()
                         .eq(Conversation::getUserId, userId)
@@ -46,14 +51,6 @@ public class ConversationService {
                         .eq(Conversation::getTypeId, otherUserId)
         );
         if (!list.isEmpty()) return list.get(0);
-
-        List<Conversation> reverseList = conversationMapper.selectList(
-                new LambdaQueryWrapper<Conversation>()
-                        .eq(Conversation::getUserId, otherUserId)
-                        .eq(Conversation::getType, "SINGLE")
-                        .eq(Conversation::getTypeId, userId)
-        );
-        if (!reverseList.isEmpty()) return reverseList.get(0);
 
         Conversation conv = new Conversation();
         conv.setType("SINGLE");
@@ -63,7 +60,6 @@ public class ConversationService {
         conversationMapper.insert(conv);
         return conv;
     }
-
     public Conversation getConversationById(Long id) {
         return conversationMapper.selectById(id);
     }
@@ -79,6 +75,10 @@ public class ConversationService {
     }
 
     public Conversation getOrCreateGroupConversation(Long userId, Long groupId) {
+        if (userId == null || groupId == null) {
+            log.error("getOrCreateGroupConversation failed: userId={}, groupId={}", userId, groupId);
+            throw new RuntimeException("参数缺失，无法创建会话");
+        }
         List<Conversation> list = conversationMapper.selectList(
                 new LambdaQueryWrapper<Conversation>()
                         .eq(Conversation::getUserId, userId)

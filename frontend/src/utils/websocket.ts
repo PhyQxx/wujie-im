@@ -29,21 +29,30 @@ class WsClient {
     }
 
     this.ws.onmessage = (event) => {
+      console.log('[WS] Raw message received:', event.data)
       try {
         const raw = JSON.parse(event.data)
         const msg: WsMessage = { type: raw.type, data: raw.data }
+        console.log('[WS] Parsed message type:', msg.type)
+        
         // type=message 时 data 字段是加密的，需要解密
         if (msg.type === 'message' && typeof msg.data === 'string') {
           try {
+            console.log('[WS] Decrypting message data...')
             const decrypted = decrypt(msg.data)
+            console.log('[WS] Decrypted JSON:', decrypted)
             msg.data = JSON.parse(decrypted)
           } catch (e) {
             console.error('[WS] 解密 message data 失败', e)
           }
         }
+        
         const handlers = this.handlers.get(msg.type)
         if (handlers) {
+          console.log(`[WS] Calling ${handlers.length} handlers for type ${msg.type}`)
           handlers.forEach(h => h(msg.data))
+        } else {
+          console.warn('[WS] No handlers for message type:', msg.type)
         }
       } catch (e) {
         console.error('WsMessage parse error', e)

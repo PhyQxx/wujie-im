@@ -48,6 +48,8 @@ export interface GroupInfo {
   ownerId: number
   ownerName?: string
   needAudit: boolean
+  memberCount?: number
+  muteAll?: number
 }
 
 export interface GroupMember {
@@ -90,7 +92,7 @@ export interface Robot {
 export interface AiConfig {
   id: number
   name?: string
-  provider: 'MINIMAX' | 'GLM' | 'DEEPSEEK'
+  provider: 'MINIMAX' | 'GLM' | 'DEEPSEEK' | 'CUSTOM'
   model: string
   apiKey: string
   apiUrl?: string

@@ -20,19 +20,33 @@ public class RobotController {
     private RobotService robotService;
     @Autowired
     private AiService aiService;
+    @Autowired
+    private com.wujie.im.common.JwtUtil jwtUtil;
 
     @PostMapping("/create")
-    public Result<Robot> createRobot(@RequestBody Map<String, Object> params) {
+    public Result<Robot> createRobot(@RequestBody Map<String, Object> params,
+                                    @RequestHeader(value = "Authorization", required = false) String auth) {
+        Long ownerId = params.get("ownerId") != null ? Long.valueOf(params.get("ownerId").toString()) : null;
+        if (ownerId == null && auth != null && auth.startsWith("Bearer ")) {
+            ownerId = jwtUtil.getUserId(auth.substring(7));
+        }
+        if (ownerId == null) return Result.error("缺少 ownerId");
+        
         return Result.success(robotService.createRobot(
                 (String) params.get("name"),
                 (String) params.get("avatar"),
                 (String) params.get("type"),
-                Long.valueOf(params.get("ownerId").toString())
+                ownerId
         ));
     }
 
     @GetMapping("/list")
-    public Result<List<Robot>> listRobots(@RequestParam Long ownerId) {
+    public Result<List<Robot>> listRobots(@RequestParam(required = false) Long ownerId,
+                                         @RequestHeader(value = "Authorization", required = false) String auth) {
+        if (ownerId == null && auth != null && auth.startsWith("Bearer ")) {
+            ownerId = jwtUtil.getUserId(auth.substring(7));
+        }
+        if (ownerId == null) return Result.error("缺少 ownerId");
         return Result.success(robotService.listRobots(ownerId));
     }
 

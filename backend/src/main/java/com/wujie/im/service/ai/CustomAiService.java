@@ -2,7 +2,6 @@ package com.wujie.im.service.ai;
 
 import com.wujie.im.entity.AiConfig;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
@@ -13,19 +12,31 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 自定义 AI 服务，支持所有符合 OpenAI 接口规范的提供商
+ */
 @Slf4j
 @Service
-public class GlmService {
-    @Value("${wujie.im.ai.glm.api-url}")
-    private String apiUrl;
+public class CustomAiService {
 
     public String chat(AiConfig config, List<String> history, String userMessage) {
-        String targetUrl = (config.getApiUrl() != null && !config.getApiUrl().isBlank()) ? config.getApiUrl() : apiUrl;
-        if (targetUrl != null && !targetUrl.contains("/chat/completions") && targetUrl.endsWith("/v4")) {
-            targetUrl += "/chat/completions";
-        }
-        log.info("[GLM Request] targetUrl: {}, model: {}", targetUrl, config.getModel());
         try {
+            String targetUrl = config.getApiUrl();
+            if (targetUrl == null || targetUrl.isBlank()) {
+                return "错误：自定义提供商必须提供 API URL";
+            }
+            
+            // 自动修正符合 OpenAI 规范的 URL
+            if (!targetUrl.contains("/chat/completions")) {
+                if (targetUrl.endsWith("/")) {
+                    targetUrl += "chat/completions";
+                } else {
+                    targetUrl += "/chat/completions";
+                }
+            }
+            
+            log.info("[Custom AI Request] targetUrl: {}, model: {}", targetUrl, config.getModel());
+            
             URL url = new URL(targetUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -74,26 +85,27 @@ public class GlmService {
             if (code == 200) {
                 try (java.util.Scanner s = new java.util.Scanner(conn.getInputStream())) {
                     String resp = s.useDelimiter("\\A").next();
-                    return parseGlmResponse(resp);
+                    return parseResponse(resp);
                 }
             } else {
                 try (java.util.Scanner s = new java.util.Scanner(conn.getErrorStream())) {
                     String err = s.hasNext() ? s.useDelimiter("\\A").next() : "无错误详情";
-                    log.error("GLM API error: url={}, code={}, response={}", targetUrl, code, err);
+                    log.error("Custom AI API error: code={}, response={}", code, err);
                     return "请求失败: " + code + " (" + err + ")";
                 }
             }
         } catch (Exception e) {
-            log.error("GLM API error", e);
+            log.error("Custom AI service error", e);
             return "AI服务异常: " + e.getMessage();
         }
     }
 
-    private String parseGlmResponse(String resp) {
+    private String parseResponse(String resp) {
         try {
             com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(resp);
             return node.path("choices").path(0).path("message").path("content").asText();
         } catch (Exception e) {
+            log.warn("Failed to parse Custom AI response, returning raw content: {}", e.getMessage());
             return resp;
         }
     }

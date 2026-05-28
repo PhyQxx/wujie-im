@@ -3,7 +3,7 @@ import { ElMessage } from 'element-plus'
 import { encrypt, decrypt } from './crypto'
 
 // 需要加解密的接口路径前缀
-const CRYPTO_PATHS = ['/message', '/conversation']
+const CRYPTO_PATHS = ['/message', '/conversation', '/friend', '/group', '/robot']
 
 // 判断是否需要加解密
 function needsCrypto(url: string): boolean {

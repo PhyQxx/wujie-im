@@ -11,12 +11,19 @@ import com.wujie.im.entity.User;
 public class Conversation {
     @TableId(type = IdType.AUTO)
     private Long id;
+    @TableField("type")
     private String type;
+    @TableField("type_id")
     private Long typeId;
+    @TableField("user_id")
     private Long userId;
+    @TableField("last_message_id")
     private Long lastMessageId;
+    @TableField("last_message_content")
     private String lastMessageContent;
+    @TableField("last_message_time")
     private LocalDateTime lastMessageTime;
+    @TableField("unread_count")
     private Integer unreadCount;
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;

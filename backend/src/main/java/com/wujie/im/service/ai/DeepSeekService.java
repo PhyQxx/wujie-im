@@ -22,6 +22,16 @@ public class DeepSeekService {
     public String chat(AiConfig config, List<String> history, String userMessage) {
         try {
             String targetUrl = (config.getApiUrl() != null && !config.getApiUrl().isBlank()) ? config.getApiUrl() : apiUrl;
+            
+            // 自动修正符合 OpenAI 规范的 URL
+            if (targetUrl != null && !targetUrl.contains("/chat/completions")) {
+                if (targetUrl.endsWith("/")) {
+                    targetUrl += "chat/completions";
+                } else {
+                    targetUrl += "/chat/completions";
+                }
+            }
+            
             URL url = new URL(targetUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -35,16 +45,24 @@ public class DeepSeekService {
             body.put("max_tokens", config.getMaxTokens());
 
             List<Map<String, String>> messages = new ArrayList<>();
-            if (config.getSystemPrompt() != null) {
+            if (config.getSystemPrompt() != null && !config.getSystemPrompt().isBlank()) {
                 Map<String, String> sysMsg = new HashMap<>();
                 sysMsg.put("role", "system");
                 sysMsg.put("content", config.getSystemPrompt());
                 messages.add(sysMsg);
             }
-            for (int i = 0; i < history.size(); i++) {
+            for (String h : history) {
                 Map<String, String> m = new HashMap<>();
-                m.put("role", i % 2 == 0 ? "user" : "assistant");
-                m.put("content", history.get(i));
+                if (h.startsWith("assistant:")) {
+                    m.put("role", "assistant");
+                    m.put("content", h.substring(10));
+                } else if (h.startsWith("user:")) {
+                    m.put("role", "user");
+                    m.put("content", h.substring(5));
+                } else {
+                    m.put("role", "user");
+                    m.put("content", h);
+                }
                 messages.add(m);
             }
             Map<String, String> msg = new HashMap<>();
@@ -64,8 +82,13 @@ public class DeepSeekService {
                     String resp = s.useDelimiter("\\A").next();
                     return parseDeepSeekResponse(resp);
                 }
+            } else {
+                try (java.util.Scanner s = new java.util.Scanner(conn.getErrorStream())) {
+                    String err = s.hasNext() ? s.useDelimiter("\\A").next() : "无错误详情";
+                    log.error("DeepSeek API error: url={}, code={}, response={}", targetUrl, code, err);
+                    return "请求失败: " + code + " (" + err + ")";
+                }
             }
-            return "请求失败: " + code;
         } catch (Exception e) {
             log.error("DeepSeek API error", e);
             return "AI服务异常: " + e.getMessage();

@@ -9,6 +9,8 @@ export const messageApi = {
   uploadImage: (formData: FormData) =>
     request.post('/upload/image', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   uploadFile: (formData: FormData) =>
-    request.post('/upload/file', formData, { headers: { 'Content-Type': 'multipart/form-data' } })
+    request.post('/upload/file', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
+  search: (params: { conversationId: number; keyword: string }) =>
+    request.get('/message/search', { params })
 }
 
