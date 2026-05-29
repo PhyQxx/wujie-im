@@ -129,6 +129,7 @@ class WsClient {
   }
 }
 
-export const wsClient = new WsClient(`ws://${location.host}/ws`)
+const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+export const wsClient = new WsClient(`${wsProtocol}//${location.host}/ws`)
 
 export default wsClient
