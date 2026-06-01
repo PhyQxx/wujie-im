@@ -7,10 +7,6 @@
         <span v-if="isAtAll" class="at-all-badge">@全体</span>
         {{ senderName }}
       </div>
-      <!-- 回复引用内容 -->
-      <div v-if="message.replyId" class="reply-quote">
-        <span class="reply-arrow">↳</span> {{ message.meta }}
-      </div>
       <div class="msg-bubble">
         <div v-if="message.recall" class="recalled">消息已撤回</div>
         <template v-else>
@@ -62,6 +58,10 @@
           <!-- 纯文本/Markdown -->
           <div v-else class="text-msg" v-html="renderMarkdown(message.content)" @click="handleContentClick" />
         </template>
+      </div>
+      <!-- 回复引用内容 -->
+      <div v-if="message.replyId" class="reply-quote">
+        <span class="reply-arrow">↳</span> {{ message.replyContent || '引用消息不存在' }}
       </div>
       <div class="msg-actions">
         <button v-if="!message.recall" class="msg-action-btn" @click="$emit('reply', message)" title="回复">↩</button>
@@ -294,7 +294,7 @@ function formatTime(time: string) {
   font-size: 11px;
   font-weight: 600;
   flex-shrink: 0;
-  align-self: flex-end;
+  align-self: flex-start;
 }
 .msg-body {
   display: flex;

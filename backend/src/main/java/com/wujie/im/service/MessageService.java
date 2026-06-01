@@ -169,6 +169,7 @@ public class MessageService {
         pushMsg.setMeta(msg.getMeta());
         pushMsg.setStatus(msg.getStatus());
         pushMsg.setReplyId(msg.getReplyId());
+        pushMsg.setReplyContent(msg.getReplyContent());
         pushMsg.setCreateTime(msg.getCreateTime());
         pushMsg.setRecall(msg.getRecall());
         return pushMsg;
@@ -220,6 +221,7 @@ public class MessageService {
         q.last("LIMIT " + limit);
         List<Message> msgs = messageMapper.selectList(q);
         Collections.reverse(msgs);
+        fillReplyContent(msgs);
         return msgs;
     }
 
@@ -242,6 +244,7 @@ public class MessageService {
         q.last("LIMIT " + limit);
         List<Message> msgs = messageMapper.selectList(q);
         Collections.reverse(msgs);
+        fillReplyContent(msgs);
         return msgs;
     }
 
@@ -256,6 +259,7 @@ public class MessageService {
         q.last("LIMIT " + limit);
         List<Message> msgs = messageMapper.selectList(q);
         Collections.reverse(msgs);
+        fillReplyContent(msgs);
         return msgs;
     }
 
@@ -371,6 +375,45 @@ public class MessageService {
             }
         }
         wsHandler.sendToUser(userId, JSONUtil.toJsonStr(Map.of("type", "message_recalled", "data", messageId)));
+    }
+
+    private void fillReplyContent(List<Message> msgs) {
+        List<Long> replyIds = msgs.stream()
+                .map(Message::getReplyId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+        if (replyIds.isEmpty()) return;
+
+        List<Message> replyMsgs = messageMapper.selectBatchIds(replyIds);
+        Map<Long, String> replyContentMap = new HashMap<>();
+        for (Message rm : replyMsgs) {
+            replyContentMap.put(rm.getId(), truncateForReply(rm.getContent()));
+        }
+        for (Message msg : msgs) {
+            if (msg.getReplyId() != null) {
+                msg.setReplyContent(replyContentMap.get(msg.getReplyId()));
+            }
+        }
+    }
+
+    private String truncateForReply(String content) {
+        if (content == null) return null;
+        if (content.startsWith("[")) {
+            try {
+                cn.hutool.json.JSONArray arr = JSONUtil.parseArray(content);
+                for (Object item : arr) {
+                    if (item instanceof cn.hutool.json.JSONObject obj) {
+                        if ("text".equals(obj.getStr("type"))) {
+                            String text = obj.getStr("content");
+                            return text != null && text.length() > 50 ? text.substring(0, 50) + "..." : text;
+                        }
+                    }
+                }
+                return "[图片消息]";
+            } catch (Exception ignored) { /* ignored */ }
+        }
+        return content.length() > 50 ? content.substring(0, 50) + "..." : content;
     }
 
     private String extractPreviewContent(String content) {

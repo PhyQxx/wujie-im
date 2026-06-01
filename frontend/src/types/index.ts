@@ -23,6 +23,7 @@ export interface Message {
   status: 'SENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'RECALLED' | 'FAILED'
   recall?: boolean
   replyId?: number
+  replyContent?: string
   createTime: string
 }
 
