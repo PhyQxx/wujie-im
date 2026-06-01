@@ -21,6 +21,10 @@
 
       <div class="panel-tabs">
         <button class="tab-btn" :class="{ active: tab === 'friends' }" @click="tab = 'friends'">好友</button>
+        <button class="tab-btn" :class="{ active: tab === 'newfriends' }" @click="tab = 'newfriends'">
+          新朋友
+          <span v-if="pendingRequests.length + myGroupRequests.length" class="tab-badge">{{ pendingRequests.length + myGroupRequests.length }}</span>
+        </button>
         <button class="tab-btn" :class="{ active: tab === 'groups' }" @click="tab = 'groups'">群组</button>
         <button class="tab-btn" :class="{ active: tab === 'blacklist' }" @click="tab = 'blacklist'">黑名单</button>
       </div>
@@ -30,28 +34,49 @@
       </div>
 
       <div class="contacts-list">
-        <!-- 好友申请 -->
-        <div v-if="pendingRequests.length > 0" class="friend-requests">
-          <div class="group-title">
-            好友申请
-            <span class="request-badge">{{ pendingRequests.length }}</span>
-          </div>
-          <div v-for="req in pendingRequests" :key="req.id" class="request-item">
-            <div class="contact-avatar-wrap">
-              <div class="contact-avatar" :style="{ background: getAvatarBg(req.fromUser), color: getAvatarColor(req.fromUser) }">
-                {{ (req.fromUser?.nickname || req.fromUser?.username)?.[0] }}
+        <!-- 新朋友 tab -->
+        <template v-if="tab === 'newfriends'">
+          <div v-if="pendingRequests.length > 0" class="friend-requests">
+            <div class="group-title">
+              好友申请
+              <span class="request-badge">{{ pendingRequests.length }}</span>
+            </div>
+            <div v-for="req in pendingRequests" :key="req.id" class="request-item">
+              <div class="contact-avatar-wrap">
+                <div class="contact-avatar" :style="{ background: getAvatarBg(req.fromUser), color: getAvatarColor(req.fromUser) }">
+                  {{ (req.fromUser?.nickname || req.fromUser?.username)?.[0] }}
+                </div>
+              </div>
+              <div class="request-info">
+                <div class="request-name">{{ req.fromUser?.nickname || req.fromUser?.username }}</div>
+                <div class="request-hint">{{ req.reason || '请求添加好友' }}</div>
+              </div>
+              <div class="request-actions">
+                <button class="btn-accept" @click="handleRequest(req.id, 'agree')">接受</button>
+                <button class="btn-decline" @click="handleRequest(req.id, 'reject')">拒绝</button>
               </div>
             </div>
-            <div class="request-info">
-              <div class="request-name">{{ req.fromUser?.nickname || req.fromUser?.username }}</div>
-              <div class="request-hint">{{ req.reason || '请求添加好友' }}</div>
-            </div>
-            <div class="request-actions">
-              <button class="btn-accept" @click="handleRequest(req.id, 'agree')">接受</button>
-              <button class="btn-decline" @click="handleRequest(req.id, 'reject')">拒绝</button>
+          </div>
+          <div v-if="myGroupRequests.length > 0" class="friend-requests">
+            <div class="group-title">群聊申请 <span class="request-badge">{{ myGroupRequests.length }}</span></div>
+            <div v-for="req in myGroupRequests" :key="req.id" class="request-item">
+              <div class="contact-avatar-wrap">
+                <div class="contact-avatar" :style="{ background: getAvatarBg(req.fromUser), color: getAvatarColor(req.fromUser) }">
+                  {{ (req.fromUser?.nickname || req.fromUser?.username)?.[0] || '用' }}
+                </div>
+              </div>
+              <div class="request-info">
+                <div class="request-name">{{ req.fromUser?.nickname || req.fromUser?.username || '用户' + req.userId }}</div>
+                <div class="request-hint">申请加入 {{ req.groupName || '群组' + req.groupId }}{{ req.reason ? '：' + req.reason : '' }}</div>
+              </div>
+              <div class="request-actions">
+                <button class="btn-accept" @click="handleGroupRequest(req.id, 'agree')">同意</button>
+                <button class="btn-decline" @click="handleGroupRequest(req.id, 'reject')">拒绝</button>
+              </div>
             </div>
           </div>
-        </div>
+          <div v-if="!pendingRequests.length && !myGroupRequests.length" class="empty-list">暂无新朋友消息</div>
+        </template>
 
         <!-- 好友列表 -->
         <template v-if="tab === 'friends'">
@@ -339,7 +364,27 @@ onMounted(async () => {
   await friendStore.fetchFriends()
   await friendStore.fetchRequests()
   await groupStore.fetchGroups()
+  await fetchMyGroupRequests()
 })
+
+const myGroupRequests = ref<any[]>([])
+
+async function fetchMyGroupRequests() {
+  try {
+    const res = await groupStore.getAdminRequests()
+    const all = res?.data || []
+    // 按 groupId+userId 去重
+    const seen = new Set<string>()
+    myGroupRequests.value = all.filter((r: any) => {
+      const key = `${r.groupId}_${r.userId}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+  } catch {
+    myGroupRequests.value = []
+  }
+}
 
 const pendingRequests = computed(() =>
   friendStore.requests.filter(r => r.status === 'PENDING')
@@ -348,7 +393,7 @@ const pendingRequests = computed(() =>
 const filteredFriends = computed(() => {
   if (!search.value) return friendStore.friends
   return friendStore.friends.filter(f =>
-    f.username?.includes(search.value)
+    (f.nickname || f.username)?.includes(search.value)
   )
 })
 
@@ -421,12 +466,12 @@ async function handleGroupRemoveMember(m: any) {
 
 function getAvatarBg(user: any) {
   const colors = ['#D1FAE5', '#FCE7F3', '#FEF3C7', '#FEE2E2', '#DBEAFE', '#F3E8FF']
-  return colors[(user.username?.charCodeAt(0) || 0) % colors.length]
+  return colors[((user.nickname || user.username)?.charCodeAt(0) || 0) % colors.length]
 }
 
 function getAvatarColor(user: any) {
   const colors = ['#059669', '#DB2777', '#D97706', '#DC2626', '#2563EB', '#7C3AED']
-  return colors[(user.username?.charCodeAt(0) || 0) % colors.length]
+  return colors[((user.nickname || user.username)?.charCodeAt(0) || 0) % colors.length]
 }
 
 function getStatusText(user: any) {
@@ -455,6 +500,16 @@ function handleAddCommand(command: string) {
 async function handleRequest(id: number, action: 'agree' | 'reject') {
   await friendStore.handleRequest(id, action)
   ElMessage.success(action === 'agree' ? '已同意' : '已拒绝')
+}
+
+async function handleGroupRequest(requestId: number, action: 'agree' | 'reject') {
+  try {
+    await groupStore.handleJoinRequest(requestId, action)
+    ElMessage.success(action === 'agree' ? '已同意入群' : '已拒绝')
+    myGroupRequests.value = myGroupRequests.value.filter((r: any) => r.id !== requestId)
+  } catch {
+    ElMessage.error('操作失败')
+  }
 }
 
 async function startChat() {
@@ -582,6 +637,20 @@ async function handleJoinGroup() {
   transition: all 0.15s;
 }
 .tab-btn.active { background: var(--primary, #4F46E5); color: white; }
+.tab-badge {
+  display: inline-block;
+  background: var(--danger, #EF4444);
+  color: white;
+  font-size: 10px;
+  font-weight: 600;
+  min-width: 16px;
+  height: 16px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 8px;
+  padding: 0 4px;
+  margin-left: 4px;
+}
 
 .panel-search {
   padding: 10px 16px;
@@ -620,6 +689,7 @@ async function handleJoinGroup() {
 .request-name { font-size: 13px; font-weight: 500; }
 .request-hint { font-size: 11px; color: var(--text-muted, #9CA3AF); margin-top: 1px; }
 .request-actions { display: flex; gap: 6px; }
+.request-status-tag { display: flex; align-items: center; }
 .btn-accept {
   height: 28px;
   padding: 0 12px;

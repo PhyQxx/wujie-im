@@ -46,6 +46,17 @@ public class GroupController {
         return Result.success(groups);
     }
 
+    @GetMapping("/recommended/{userId}")
+    public Result<List<GroupInfo>> getRecommendedGroups(@PathVariable Long userId) {
+        List<GroupInfo> groups = groupService.getRecommendedGroups(userId);
+        for (GroupInfo g : groups) {
+            User owner = userMapper.selectById(g.getOwnerId());
+            if (owner != null) g.setOwnerName(owner.getUsername());
+            g.setMemberCount(groupService.getGroupMemberIds(g.getId()).size());
+        }
+        return Result.success(groups);
+    }
+
     @GetMapping("/{groupId}")
     public Result<GroupInfo> getGroup(@PathVariable Long groupId) {
         return Result.success(groupService.getGroupById(groupId));
@@ -84,12 +95,35 @@ public class GroupController {
 
     @GetMapping("/join-requests/{groupId}")
     public Result<List<GroupJoinRequest>> getJoinRequests(@PathVariable Long groupId) {
-        return Result.success(groupService.getJoinRequests(groupId));
+        List<GroupJoinRequest> requests = groupService.getJoinRequests(groupId);
+        for (GroupJoinRequest req : requests) {
+            User user = userService.getUserById(req.getUserId());
+            if (user != null) {
+                user.setPassword(null);
+                req.setFromUser(user);
+            }
+        }
+        return Result.success(requests);
     }
 
     @GetMapping("/my-requests/{userId}")
     public Result<List<GroupJoinRequest>> getUserJoinRequests(@PathVariable Long userId) {
         return Result.success(groupService.getUserJoinRequests(userId));
+    }
+
+    @GetMapping("/admin-requests/{userId}")
+    public Result<List<GroupJoinRequest>> getAdminPendingRequests(@PathVariable Long userId) {
+        List<GroupJoinRequest> requests = groupService.getAdminPendingRequests(userId);
+        for (GroupJoinRequest req : requests) {
+            GroupInfo group = groupService.getGroupById(req.getGroupId());
+            if (group != null) req.setGroupName(group.getName());
+            User user = userService.getUserById(req.getUserId());
+            if (user != null) {
+                user.setPassword(null);
+                req.setFromUser(user);
+            }
+        }
+        return Result.success(requests);
     }
 
     @PutMapping("/join-request/{requestId}")
@@ -104,11 +138,13 @@ public class GroupController {
     public Result<Void> updateGroup(@PathVariable Long groupId,
                                     @RequestBody Map<String, Object> params,
                                     @RequestParam Long operatorId) {
+        Integer needAudit = params.get("needAudit") != null ? Integer.valueOf(params.get("needAudit").toString()) : null;
         groupService.updateGroup(
                 groupId,
                 (String) params.get("name"),
                 (String) params.get("avatar"),
                 (String) params.get("announcement"),
+                needAudit,
                 operatorId
         );
         return Result.success();

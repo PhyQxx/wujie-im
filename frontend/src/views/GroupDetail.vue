@@ -68,7 +68,7 @@
         <div v-if="!joinRequests.length" class="empty">暂无待处理申请</div>
         <div v-for="req in joinRequests" :key="req.id" class="request-item">
           <div class="request-info">
-            <div class="request-user">{{ req.user?.username || '用户' + req.userId }}</div>
+            <div class="request-user">{{ req.fromUser?.nickname || req.fromUser?.username || '用户' + req.userId }}</div>
             <div class="request-reason">理由: {{ req.reason || '无' }}</div>
             <div class="request-time">{{ formatDate(req.createTime) }}</div>
           </div>
@@ -98,6 +98,19 @@
           <div class="info-item">
             <span class="info-label">类型</span>
             <span class="info-value">{{ group?.type === 'PRIVATE' ? '私密群' : '公开群' }}</span>
+          </div>
+          <div class="info-item">
+            <span class="info-label">加入审核</span>
+            <span class="info-value">
+              <el-switch
+                v-if="canManage"
+                :model-value="group?.needAudit === 1"
+                @change="handleToggleNeedAudit"
+                active-text="需要审核"
+                inactive-text="直接加入"
+              />
+              <span v-else>{{ group?.needAudit === 1 ? '需要审核' : '直接加入' }}</span>
+            </span>
           </div>
           <div class="info-item">
             <span class="info-label">创建时间</span>
@@ -151,7 +164,7 @@
     <el-dialog v-model="showTransferDialog" title="转让群主" width="400px">
       <el-alert title="注意：转让后您将失去管理权限，且操作不可撤销。" type="warning" :closable="false" style="margin-bottom:16px" />
       <el-select v-model="newOwnerId" placeholder="选择新群主" style="width:100%">
-        <el-option v-for="m in members.filter(m => m.userId !== currentUserId)" :key="m.userId" :label="m.user?.username" :value="m.userId" />
+        <el-option v-for="m in members.filter(m => m.userId !== currentUserId)" :key="m.userId" :label="m.user?.nickname || m.user?.username" :value="m.userId" />
       </el-select>
       <template #footer>
         <el-button @click="showTransferDialog = false">取消</el-button>
@@ -264,7 +277,7 @@ function copyInviteUrl() {
 
 function getAvatarBg(m: GroupMember) {
   const colors = ['#DBEAFE', '#D1FAE5', '#FCE7F3', '#FEF3C7', '#FEE2E2', '#F3E8FF']
-  const name = m.user?.username || ''
+  const name = m.user?.nickname || m.user?.username || ''
   return colors[name.charCodeAt(0) % colors.length]
 }
 
@@ -322,6 +335,16 @@ async function handleMuteGroup(mute: boolean) {
   try {
     await groupStore.muteGroup(groupId.value, mute)
     ElMessage.success(mute ? '已开启全员禁言' : '已取消全员禁言')
+    await groupStore.fetchGroupDetail(groupId.value)
+  } catch (e: any) {
+    ElMessage.error(e?.message || '操作失败')
+  }
+}
+
+async function handleToggleNeedAudit(val: boolean) {
+  try {
+    await groupStore.updateGroup(groupId.value, { needAudit: val ? 1 : 0 })
+    ElMessage.success(val ? '已开启加入审核' : '已关闭加入审核')
     await groupStore.fetchGroupDetail(groupId.value)
   } catch (e: any) {
     ElMessage.error(e?.message || '操作失败')

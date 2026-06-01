@@ -20,6 +20,7 @@
         <input type="text" v-model="searchKeyword" placeholder="搜索聊天..." />
       </div>
       <ConversationList :keyword="searchKeyword" :filter="activeTab" @select="selectConversation" />
+      <RecommendedGroups @create-group="showCreateGroup = true" />
     </div>
 
     <!-- 聊天主区 -->
@@ -48,6 +49,7 @@ import { useNotificationStore } from '@/stores/notification'
 import { useMessageStore } from '@/stores/message'
 import { ElMessage } from 'element-plus'
 import ConversationList from '@/components/ConversationList.vue'
+import RecommendedGroups from '@/components/RecommendedGroups.vue'
 import ChatPanel from '@/components/ChatPanel.vue'
 import wsClient from '@/utils/websocket.ts'
 import type { Conversation } from '@/types'
@@ -72,6 +74,7 @@ const tabs = [
 onMounted(async () => {
   await notificationStore.fetchNotifications()
   await conversationStore.fetchConversations()
+  groupStore.fetchRecommendedGroups()
   messageStore.initWsListener()
 
   // 请求浏览器通知权限

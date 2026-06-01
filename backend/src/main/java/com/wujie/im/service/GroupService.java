@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -156,8 +157,25 @@ public class GroupService {
         );
     }
 
+    public List<GroupJoinRequest> getAdminPendingRequests(Long userId) {
+        // 查找用户管理的群组（OWNER 或 ADMIN）
+        List<GroupMember> adminMemberships = groupMemberMapper.selectList(
+                new LambdaQueryWrapper<GroupMember>()
+                        .eq(GroupMember::getUserId, userId)
+                        .in(GroupMember::getRole, "OWNER", "ADMIN")
+        );
+        if (adminMemberships.isEmpty()) return List.of();
+        List<Long> groupIds = adminMemberships.stream().map(GroupMember::getGroupId).toList();
+        return groupJoinRequestMapper.selectList(
+                new LambdaQueryWrapper<GroupJoinRequest>()
+                        .in(GroupJoinRequest::getGroupId, groupIds)
+                        .eq(GroupJoinRequest::getStatus, "PENDING")
+                        .orderByDesc(GroupJoinRequest::getCreateTime)
+        );
+    }
+
     @Transactional
-    public void updateGroup(Long groupId, String name, String avatar, String announcement, Long operatorId) {
+    public void updateGroup(Long groupId, String name, String avatar, String announcement, Integer needAudit, Long operatorId) {
         GroupInfo group = groupInfoMapper.selectById(groupId);
         if (group == null) throw new RuntimeException("群不存在");
         GroupMember member = getMemberRole(groupId, operatorId);
@@ -167,6 +185,7 @@ public class GroupService {
         if (name != null) group.setName(name);
         if (avatar != null) group.setAvatar(avatar);
         if (announcement != null) group.setAnnouncement(announcement);
+        if (needAudit != null) group.setNeedAudit(needAudit);
         groupInfoMapper.updateById(group);
     }
 
@@ -319,6 +338,38 @@ public class GroupService {
 
         group.setOwnerId(newOwnerId);
         groupInfoMapper.updateById(group);
+    }
+
+    public List<GroupInfo> getRecommendedGroups(Long userId) {
+        // 获取用户已加入的群组
+        List<GroupMember> joinedMembers = groupMemberMapper.selectList(
+                new LambdaQueryWrapper<GroupMember>().eq(GroupMember::getUserId, userId)
+        );
+        List<Long> joinedGroupIds = joinedMembers.stream().map(GroupMember::getGroupId).toList();
+
+        // 获取已加入群组的名称集合（排除同名群组）
+        Set<String> joinedGroupNames = joinedGroupIds.stream()
+                .map(id -> { GroupInfo g = groupInfoMapper.selectById(id); return g != null ? g.getName() : null; })
+                .filter(java.util.Objects::nonNull)
+                .collect(Collectors.toSet());
+        log.info("[推荐群聊] userId={}, 已加入群组ID={}, 已加入群组名={}", userId, joinedGroupIds, joinedGroupNames);
+
+        // 查询所有公开群组
+        List<GroupInfo> publicGroups = groupInfoMapper.selectList(
+                new LambdaQueryWrapper<GroupInfo>()
+                        .eq(GroupInfo::getType, "PUBLIC")
+                        .orderByDesc(GroupInfo::getCreateTime)
+        );
+        log.info("[推荐群聊] 公开群组数={}, 公开群组ID={}", publicGroups.size(), publicGroups.stream().map(GroupInfo::getId).toList());
+
+        // Java层面排除已加入的群组（包括同名群组），返回最多10个
+        List<GroupInfo> recommended = publicGroups.stream()
+                .filter(g -> !joinedGroupIds.contains(g.getId()))
+                .filter(g -> !joinedGroupNames.contains(g.getName()))
+                .limit(10)
+                .toList();
+        log.info("[推荐群聊] 推荐结果数={}, 推荐群组ID={}", recommended.size(), recommended.stream().map(GroupInfo::getId).toList());
+        return recommended;
     }
 
     public boolean isMuted(Long groupId, Long userId) {

@@ -2,6 +2,7 @@ import request from '@/utils/request'
 
 export const groupApi = {
   list: (userId: number) => request.get(`/group/list/${userId}`),
+  getRecommended: (userId: number) => request.get(`/group/recommended/${userId}`),
   get: (groupId: number) => request.get(`/group/${groupId}`),
   create: (data: { name: string; avatar?: string; type?: string; ownerId: number }) =>
     request.post('/group/create', data),

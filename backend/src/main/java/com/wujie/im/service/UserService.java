@@ -22,6 +22,7 @@ public class UserService {
         LambdaQueryWrapper<User> q = new LambdaQueryWrapper<>();
         if (keyword != null && !keyword.isEmpty()) {
             q.like(User::getUsername, keyword)
+                    .or().apply("id IN (SELECT user_id FROM user_profile WHERE nickname LIKE {0})", "%" + keyword + "%")
                     .or().like(User::getPhone, keyword)
                     .or().like(User::getEmail, keyword);
         }

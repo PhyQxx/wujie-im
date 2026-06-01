@@ -121,6 +121,36 @@
           <div class="about-version">版本 1.0.0</div>
           <div class="about-desc">突破边界，沟通无界</div>
         </div>
+        <div class="about-github">
+          <div class="github-header">
+            <svg class="github-icon" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"></path></svg>
+            <span>GitHub 仓库</span>
+          </div>
+          <a class="github-link" href="https://github.com/PhyQxx/wujie-im" target="_blank" rel="noopener noreferrer">
+            PhyQxx/wujie-im
+          </a>
+          <div class="github-stats" v-if="githubInfo">
+            <div class="stat-item">
+              <span class="stat-value">{{ githubInfo.stargazers_count }}</span>
+              <span class="stat-label">Stars</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ githubInfo.forks_count }}</span>
+              <span class="stat-label">Forks</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-value">{{ githubInfo.open_issues_count }}</span>
+              <span class="stat-label">Issues</span>
+            </div>
+          </div>
+          <div class="about-tech">
+            <span class="tech-tag">Vue 3</span>
+            <span class="tech-tag">Spring Boot</span>
+            <span class="tech-tag">WebSocket</span>
+            <span class="tech-tag">MySQL</span>
+            <span class="tech-tag">Redis</span>
+          </div>
+        </div>
       </div>
 
       <!-- 退出登录 -->
@@ -148,6 +178,7 @@ const profileForm = ref({ nickname: '', signature: '', phone: '' })
 const pwdForm = ref({ oldPwd: '', newPwd: '', confirmPwd: '' })
 const notifySettings = ref({ message: true, sound: true, desktop: false })
 const privacySettings = ref({ showOnline: true, allowPm: true })
+const githubInfo = ref<{ stargazers_count: number; forks_count: number; open_issues_count: number } | null>(null)
 
 const settingsItems = [
   { key: 'profile', label: '个人资料', icon: '👤' },
@@ -166,6 +197,10 @@ onMounted(async () => {
   if (u) {
     profileForm.value = { nickname: u.nickname || '', signature: u.signature || '', phone: u.phone || '' }
   }
+  fetch('https://api.github.com/repos/PhyQxx/wujie-im')
+    .then(res => res.ok ? res.json() : null)
+    .then(data => { if (data) githubInfo.value = data })
+    .catch(() => {})
 })
 
 async function saveProfile() {
@@ -313,9 +348,58 @@ function logout() {
 .setting-info {}
 .setting-name { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
 .setting-desc { font-size: 12px; color: #9CA3AF; }
-.about-info { text-align: center; padding: 40px 0; }
+.about-info { text-align: center; padding: 40px 0 24px; }
 .about-logo { font-size: 32px; font-weight: 700; color: #4F46E5; margin-bottom: 8px; }
 .about-version { font-size: 14px; color: #6B7280; margin-bottom: 8px; }
 .about-desc { font-size: 14px; color: #9CA3AF; }
+.about-github {
+  border: 1px solid var(--border, #E5E7EB);
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 16px;
+}
+.github-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 12px;
+}
+.github-icon { width: 20px; height: 20px; }
+.github-link {
+  display: block;
+  font-size: 15px;
+  font-weight: 500;
+  color: #4F46E5;
+  text-decoration: none;
+  margin-bottom: 16px;
+}
+.github-link:hover { text-decoration: underline; }
+.github-stats {
+  display: flex;
+  gap: 24px;
+  padding: 12px 0;
+  border-top: 1px solid #F3F4F6;
+  border-bottom: 1px solid #F3F4F6;
+  margin-bottom: 16px;
+}
+.stat-item { display: flex; flex-direction: column; align-items: center; }
+.stat-value { font-size: 18px; font-weight: 700; color: #111827; }
+.stat-label { font-size: 12px; color: #9CA3AF; }
+.about-tech {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tech-tag {
+  padding: 4px 10px;
+  background: #EEF2FF;
+  color: #4F46E5;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
 .logout-tip { color: #6B7280; margin-bottom: 16px; }
 </style>

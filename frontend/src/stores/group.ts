@@ -18,6 +18,7 @@ export const useGroupStore = defineStore('group', () => {
   const groups = ref<GroupInfo[]>([])
   const currentGroup = ref<GroupInfo | null>(null)
   const members = ref<GroupMember[]>([])
+  const recommendedGroups = ref<GroupInfo[]>([])
   const loading = ref(false)
 
   async function fetchGroups() {
@@ -32,6 +33,21 @@ export const useGroupStore = defineStore('group', () => {
     } finally {
       loading.value = false
     }
+  }
+
+  async function fetchRecommendedGroups() {
+    const userId = localStorage.getItem('userId')
+    if (!userId) return
+    const res = await request.get(`/group/recommended/${userId}`)
+    recommendedGroups.value = res.data || []
+  }
+
+  async function joinGroup(groupId: number) {
+    const userId = localStorage.getItem('userId')
+    if (!userId) return
+    await request.post('/group/join', { groupId, userId, reason: '' })
+    // 从推荐列表移除
+    recommendedGroups.value = recommendedGroups.value.filter(g => g.id !== groupId)
   }
 
   async function createGroup(name: string, memberIds: number[], type: 'PUBLIC' | 'PRIVATE' = 'PUBLIC') {
@@ -57,7 +73,7 @@ export const useGroupStore = defineStore('group', () => {
     return res.data
   }
 
-  async function updateGroup(groupId: number, data: { name?: string; avatar?: string; announcement?: string }) {
+  async function updateGroup(groupId: number, data: { name?: string; avatar?: string; announcement?: string; needAudit?: number }) {
     const userStore = useUserStore()
     await request.put(`/group/update/${groupId}?operatorId=${userStore.currentUser?.id}`, data)
     const idx = groups.value.findIndex(g => g.id === groupId)
@@ -133,16 +149,21 @@ export const useGroupStore = defineStore('group', () => {
     return request.get(`/group/my-requests/${userStore.currentUser?.id}`)
   }
 
+  async function getAdminRequests() {
+    const userStore = useUserStore()
+    return request.get(`/group/admin-requests/${userStore.currentUser?.id}`)
+  }
+
   async function handleJoinRequest(requestId: number, action: 'agree' | 'reject') {
     const userStore = useUserStore()
-    await request.put(`/group/join-request/${requestId}?reviewerId=${userStore.currentUser?.id}&action=${action}`)
+    await request.put(`/group/join-request/${requestId}?reviewerId=${userStore.currentUser?.id}&action=${action.toUpperCase()}`)
   }
 
   return {
-    groups, currentGroup, members, loading,
-    fetchGroups, createGroup, fetchMembers, fetchGroupDetail,
+    groups, currentGroup, members, recommendedGroups, loading,
+    fetchGroups, fetchRecommendedGroups, joinGroup, createGroup, fetchMembers, fetchGroupDetail,
     updateGroup, inviteMembers, removeMember, leaveGroup, dissolveGroup,
     muteMember, unmuteMember, setAdmin,
-    getJoinRequests, getMyRequests, handleJoinRequest
+    getJoinRequests, getMyRequests, getAdminRequests, handleJoinRequest
   }
 })

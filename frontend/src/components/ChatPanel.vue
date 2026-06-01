@@ -21,7 +21,7 @@
           <button class="header-btn" :class="{ active: showSidebar }" @click="showSidebar = !showSidebar" title="侧边栏">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
           </button>
-          <button class="header-btn" @click="$router.push('/contacts')" title="联系人">
+          <button class="header-btn" @click="currentConversation.type === 'GROUP' ? $router.push(`/group/${currentConversation.typeId}`) : $router.push('/contacts')" :title="currentConversation.type === 'GROUP' ? '群聊信息' : '联系人'">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
           </button>
         </div>
@@ -121,10 +121,13 @@
           <button class="reply-close" @click="replyingTo = null">✕</button>
         </div>
         <!-- 待发送图片缩略图 -->
-        <div v-if="pendingImages.length" class="pending-images">
-          <div v-for="(url, idx) in pendingImages" :key="idx" class="pending-img-wrap">
+        <div v-if="pendingImages.length || uploading" class="pending-images">
+          <div v-for="(url, idx) in pendingImages" :key="idx" class="pending-img-wrap fade-in">
             <img :src="url" class="pending-img" />
             <button class="pending-img-remove" @click="removePendingImage(idx)">✕</button>
+          </div>
+          <div v-if="uploading" class="pending-img-wrap uploading-placeholder">
+            <div class="uploading-img-spinner"></div>
           </div>
         </div>
         <div class="input-actions-top">
@@ -169,7 +172,7 @@
             </div>
           </transition>
 
-          <div class="md-editor-wrap" @click="startEditing">
+          <div class="md-editor-wrap" @click="startEditing" @paste="handlePaste">
             <!-- 渲染层：失去焦点时显示 -->
             <div v-if="!isEditing && inputText" class="md-render-layer" v-html="getRenderedLines()" />
             
@@ -432,7 +435,7 @@ function isOnline(conv: Conversation) {
 function getAvatarBgFromUser(user: any) {
   if (!user) return '#ccc'
   const colors = ['#DBEAFE', '#D1FAE5', '#FCE7F3', '#FEF3C7', '#FEE2E2', '#F3E8FF']
-  const name = user.username || ''
+  const name = user.nickname || user.username || ''
   return colors[name.charCodeAt(0) % colors.length]
 }
 
@@ -491,6 +494,33 @@ async function sendMessage() {
     scrollToBottom()
   } catch (_e) {
     inputText.value = savedText
+  }
+}
+
+async function handlePaste(e: ClipboardEvent) {
+  const items = e.clipboardData?.items
+  if (!items) return
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault()
+      const file = item.getAsFile()
+      if (!file) return
+      uploading.value = true
+      try {
+        const fd = new FormData()
+        fd.append('file', file, `clipboard_${Date.now()}.png`)
+        const res = await messageApi.uploadImage(fd)
+        if (res.data?.url) {
+          pendingImages.value.push(res.data.url)
+          ElMessage.success('图片已添加')
+        }
+      } catch (_e) {
+        ElMessage.error('图片上传失败')
+      } finally {
+        uploading.value = false
+      }
+      return
+    }
   }
 }
 
@@ -913,6 +943,20 @@ defineExpose({ scrollToBottom, setReplyingTo })
 .pending-images { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .pending-img-wrap { position: relative; }
 .pending-img { width: 60px; height: 60px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border, #E5E7EB); }
+.fade-in { animation: fadeInScale 0.3s ease-out; }
+@keyframes fadeInScale { from { opacity: 0; transform: scale(0.8); } to { opacity: 1; transform: scale(1); } }
+.uploading-placeholder {
+  width: 60px; height: 60px; border-radius: 8px; border: 1px dashed var(--border, #D1D5DB);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg-secondary, #F9FAFB);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+.uploading-img-spinner {
+  width: 24px; height: 24px; border: 3px solid var(--border, #E5E7EB);
+  border-top-color: var(--primary, #5B8DEF); border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
 .pending-img-remove {
   position: absolute; top: -6px; right: -6px; width: 18px; height: 18px;
   background: rgba(0,0,0,0.6); color: white; border: none; border-radius: 50%;

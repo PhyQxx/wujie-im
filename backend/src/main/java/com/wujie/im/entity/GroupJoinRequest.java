@@ -20,4 +20,9 @@ public class GroupJoinRequest {
     private LocalDateTime updateTime;
     @TableLogic
     private Integer deleted;
+
+    @TableField(exist = false)
+    private String groupName;
+    @TableField(exist = false)
+    private User fromUser;
 }

@@ -73,7 +73,7 @@ const canManage = computed(() => currentMember.value && (currentMember.value.rol
 
 const filteredMembers = computed(() => {
   if (!searchKey.value) return members.value
-  return members.value.filter(m => m.user?.username?.includes(searchKey.value))
+  return members.value.filter(m => (m.user?.nickname || m.user?.username)?.includes(searchKey.value))
 })
 
 onMounted(() => groupStore.fetchMembers(props.groupId))
@@ -104,7 +104,7 @@ async function toggleAdmin(m: GroupMember) {
 }
 
 async function handleRemove(m: GroupMember) {
-  await ElMessageBox.confirm(`确定要将 ${m.user?.username} 移出群聊吗？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(`确定要将 ${m.user?.nickname || m.user?.username} 移出群聊吗？`, '提示', { type: 'warning' })
   await groupStore.removeMember(props.groupId, m.userId)
   ElMessage.success('已移出')
 }
