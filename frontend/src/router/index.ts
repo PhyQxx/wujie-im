@@ -14,6 +14,7 @@ const router = createRouter({
       children: [
         { path: '/conversation', name: 'Conversation', component: () => import('@/views/Main.vue') },
         { path: '/contacts', name: 'Contacts', component: () => import('@/views/Contacts.vue') },
+        { path: '/announcement', name: 'Announcement', component: () => import('@/views/Announcement.vue') },
         { path: '/settings', name: 'Settings', component: () => import('@/views/Settings.vue') },
         { path: '/notification', name: 'Notification', component: () => import('@/views/Notification.vue') },
         // 管理后台
@@ -26,6 +27,7 @@ const router = createRouter({
         { path: '/admin/robots', name: 'AdminRobots', component: () => import('@/views/AdminDashboard.vue'), meta: { adminTab: 'robots', requiresAdmin: true } },
         { path: '/admin/ai', name: 'AdminAI', component: () => import('@/views/AdminDashboard.vue'), meta: { adminTab: 'ai', requiresAdmin: true } },
         { path: '/admin/system', name: 'AdminSystem', component: () => import('@/views/AdminDashboard.vue'), meta: { adminTab: 'system', requiresAdmin: true } },
+        { path: '/admin/announcements', name: 'AdminAnnouncements', component: () => import('@/views/AdminDashboard.vue'), meta: { adminTab: 'announcements', requiresAdmin: true } },
         // 其他
         { path: '/group/:id', name: 'GroupDetail', component: () => import('@/views/GroupDetail.vue') },
         { path: '/join/group/:token', name: 'JoinGroupByToken', component: () => import('@/views/JoinGroup.vue') },

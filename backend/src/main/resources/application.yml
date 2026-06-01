@@ -49,11 +49,6 @@ wujie:
       heartbeat-interval: ${WS_HEARTBEAT_INTERVAL:30000}
     crypto:
       aes-key: ${AES_KEY:}
-    minio:
-      endpoint: http://127.0.0.1:9010
-      access-key: minioadmin
-      secret-key: minioadmin
-      bucket: wujie-im
     ai:
       minimax:
         api-url: ${MINIMAX_API_URL:https://api.minimax.chat/v1/text/chatcompletion_v2}

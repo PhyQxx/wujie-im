@@ -125,6 +125,18 @@ export interface Notification {
   createTime: string
 }
 
+export interface Announcement {
+  id: number
+  title: string
+  content: string
+  type: string
+  status: number
+  publisherId?: number
+  publishTime?: string
+  isRead?: boolean
+  createTime: string
+}
+
 export interface WsMessage {
   type: string
   data: any

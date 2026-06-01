@@ -259,8 +259,9 @@ const filteredMembers = computed(() => {
   if (!mentionSearch.value) return [allOption, ...members]
   
   const search = mentionSearch.value.toLowerCase()
-  const filtered = members.filter(m => 
+  const filtered = members.filter(m =>
     m.user?.username?.toLowerCase().includes(search)
+    || m.user?.nickname?.toLowerCase().includes(search)
   )
   
   if ('全体成员'.includes(search)) {
@@ -437,7 +438,9 @@ async function sendMessage() {
     // 过滤掉已经在文本中被删掉的@
     const activeAtIds = atUserIds.value.filter(id => {
       const member = groupStore.members.find(m => m.userId === id)
-      return member && inputText.value.includes(`@${member.user.username}`)
+      if (!member) return false
+      const displayName = member.user?.nickname || member.user.username
+      return inputText.value.includes(`@${displayName}`)
     })
     if (activeAtIds.length > 0) metaObj.atUserIds = activeAtIds
   }

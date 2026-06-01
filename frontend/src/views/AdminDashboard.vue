@@ -427,6 +427,59 @@
       </div>
       <div v-if="!systemConfigs.length" class="empty-text">暂无配置</div>
     </div>
+
+    <!-- 公告管理 -->
+    <div v-if="activeTab === 'announcements'" class="section">
+      <div class="section-header">
+        <h3>公告管理</h3>
+        <el-button type="primary" size="small" @click="showCreateAnnouncement = true">发布公告</el-button>
+      </div>
+      <el-table :data="announcementList" stripe style="width:100%">
+        <el-table-column prop="title" label="标题" min-width="150" />
+        <el-table-column prop="type" label="类型" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.type === 'IMPORTANT' ? 'danger' : 'info'" size="small">{{ row.type === 'IMPORTANT' ? '重要' : '系统' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 1 ? 'success' : 'warning'" size="small">{{ row.status === 1 ? '已发布' : '草稿' }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="publishTime" label="发布时间" width="170">
+          <template #default="{ row }">{{ row.publishTime || '-' }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="260" fixed="right">
+          <template #default="{ row }">
+            <el-button size="small" @click="editAnnouncement(row)">编辑</el-button>
+            <el-button v-if="row.status === 0" size="small" type="success" @click="publishAnnouncement(row.id)">发布</el-button>
+            <el-button v-else size="small" type="warning" @click="unpublishAnnouncement(row.id)">撤回</el-button>
+            <el-button size="small" type="danger" @click="deleteAnnouncement(row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <el-dialog v-model="showCreateAnnouncement" :title="editingAnnouncement ? '编辑公告' : '发布公告'" width="500px">
+        <el-form :model="announcementForm" label-width="80px">
+          <el-form-item label="标题">
+            <el-input v-model="announcementForm.title" placeholder="公告标题" />
+          </el-form-item>
+          <el-form-item label="类型">
+            <el-select v-model="announcementForm.type">
+              <el-option label="系统" value="SYSTEM" />
+              <el-option label="重要" value="IMPORTANT" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="内容">
+            <el-input v-model="announcementForm.content" type="textarea" :rows="6" placeholder="公告内容" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="showCreateAnnouncement = false">取消</el-button>
+          <el-button type="primary" @click="saveAnnouncement">确定</el-button>
+        </template>
+      </el-dialog>
+    </div>
   </div>
 </template>
 
@@ -434,6 +487,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { adminApi } from '@/api/admin'
+import { announcementApi } from '@/api/announcement'
 import { groupApi } from '@/api/group'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
@@ -451,7 +505,8 @@ const tabTitles: Record<string, string> = {
   groups: '群组管理',
   robots: '机器人管理',
   ai: 'AI 配置',
-  system: '系统配置'
+  system: '系统配置',
+  announcements: '公告管理'
 }
 const tabTitle = computed(() => tabTitles[activeTab.value] || '管理后台')
 
@@ -659,6 +714,7 @@ function loadTabData() {
   else if (tab === 'content') loadSensitiveWords()
   else if (tab === 'ai') loadAiConfigs()
   else if (tab === 'system') loadSystemConfigs()
+  else if (tab === 'announcements') loadAnnouncements()
   else if (tab === 'operations') loadStats()
 }
 
@@ -891,6 +947,67 @@ async function loadGroupMessages() {
 
 async function loadMoreMessages() {
   await loadGroupMessages()
+}
+
+// ===== 公告管理 =====
+const announcementList = ref<any[]>([])
+const showCreateAnnouncement = ref(false)
+const editingAnnouncement = ref<any>(null)
+const announcementForm = ref({ title: '', content: '', type: 'SYSTEM' })
+
+async function loadAnnouncements() {
+  try {
+    const res = await announcementApi.adminList()
+    announcementList.value = res.data || []
+  } catch { ElMessage.error('加载公告失败') }
+}
+
+function editAnnouncement(row: any) {
+  editingAnnouncement.value = row
+  announcementForm.value = { title: row.title, content: row.content, type: row.type }
+  showCreateAnnouncement.value = true
+}
+
+async function saveAnnouncement() {
+  if (!announcementForm.value.title) { ElMessage.warning('请输入标题'); return }
+  try {
+    if (editingAnnouncement.value) {
+      await announcementApi.adminUpdate(editingAnnouncement.value.id, announcementForm.value)
+      ElMessage.success('更新成功')
+    } else {
+      await announcementApi.adminCreate(announcementForm.value)
+      ElMessage.success('创建成功')
+    }
+    showCreateAnnouncement.value = false
+    editingAnnouncement.value = null
+    announcementForm.value = { title: '', content: '', type: 'SYSTEM' }
+    await loadAnnouncements()
+  } catch { ElMessage.error('操作失败') }
+}
+
+async function publishAnnouncement(id: number) {
+  try {
+    await announcementApi.adminPublish(id, {})
+    ElMessage.success('已发布')
+    await loadAnnouncements()
+  } catch { ElMessage.error('发布失败') }
+}
+
+async function unpublishAnnouncement(id: number) {
+  try {
+    await announcementApi.adminUnpublish(id)
+    ElMessage.success('已撤回')
+    await loadAnnouncements()
+  } catch { ElMessage.error('撤回失败') }
+}
+
+async function deleteAnnouncement(id: number) {
+  try {
+    await ElMessageBox.confirm('确定删除该公告？', '提示', { type: 'warning' })
+    await announcementApi.adminDelete(id)
+    ElMessage.success('已删除')
+    await loadAnnouncements()
+  } catch {}
 }
 </script>
 

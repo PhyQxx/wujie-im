@@ -21,6 +21,12 @@
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path></svg>
             <span>联系人</span>
           </router-link>
+          <!-- 通知公告 -->
+          <router-link to="/announcement" class="nav-item" :class="{ active: isActive('/announcement') }">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path></svg>
+            <span>通知公告</span>
+            <el-badge v-if="announcementStore.unreadList.length" :value="announcementStore.unreadList.length" :max="99" class="nav-badge" />
+          </router-link>
           <!-- 设置 -->
           <router-link to="/settings" class="nav-item" :class="{ active: isActive('/settings') }">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
@@ -71,6 +77,11 @@
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
             <span>系统配置</span>
           </router-link>
+          <!-- 公告管理 -->
+          <router-link to="/admin/announcements" class="nav-item" :class="{ active: isActive('/admin/announcements') }">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"></path></svg>
+            <span>公告管理</span>
+          </router-link>
         </div>
       </nav>
 
@@ -86,17 +97,35 @@
     <div class="main-wrapper">
       <router-view />
     </div>
+
+    <!-- 未读公告弹框 -->
+    <el-dialog v-model="showAnnouncementDialog" title="新公告通知" width="500px" :close-on-click-modal="false">
+      <div v-for="a in announcementStore.unreadList" :key="a.id" class="unread-announcement-item">
+        <div class="unread-ann-title">
+          <span v-if="a.type === 'IMPORTANT'" style="color:#EF4444">[重要]</span>
+          {{ a.title }}
+        </div>
+        <div class="unread-ann-content">{{ a.content }}</div>
+        <el-button size="small" type="primary" @click="handleAnnouncementRead(a.id)">我知道了</el-button>
+      </div>
+      <div v-if="announcementStore.unreadList.length > 1" style="text-align:center;margin-top:12px;">
+        <el-button @click="handleAllAnnouncementRead">全部已读</el-button>
+      </div>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
+import { useAnnouncementStore } from '@/stores/announcement'
 import wsClient from '@/utils/websocket'
 
 const route = useRoute()
 const userStore = useUserStore()
+const announcementStore = useAnnouncementStore()
+const showAnnouncementDialog = ref(false)
 
 // 页面加载时获取用户信息（处理刷新/直接访问的情况）
 onMounted(async () => {
@@ -113,7 +142,26 @@ onMounted(async () => {
   if (token) {
     wsClient.connect(token)
   }
+  // 检查未读公告
+  await announcementStore.fetchUnread()
+  if (announcementStore.unreadList.length > 0) {
+    showAnnouncementDialog.value = true
+  }
 })
+
+async function handleAnnouncementRead(id: number) {
+  await announcementStore.markRead(id)
+  if (announcementStore.unreadList.length === 0) {
+    showAnnouncementDialog.value = false
+  }
+}
+
+async function handleAllAnnouncementRead() {
+  for (const a of [...announcementStore.unreadList]) {
+    await announcementStore.markRead(a.id)
+  }
+  showAnnouncementDialog.value = false
+}
 
 const isAdmin = computed(() => {
   return localStorage.getItem('isAdmin') === 'true'
@@ -214,6 +262,9 @@ function isActive(path: string) {
   height: 18px;
   flex-shrink: 0;
 }
+.nav-badge :deep(.el-badge__content) {
+  font-size: 10px;
+}
 
 .sidebar-footer {
   padding: 12px 16px;
@@ -244,5 +295,21 @@ function isActive(path: string) {
   flex-direction: column;
   overflow: hidden;
   background: var(--bg-secondary);
+}
+
+.unread-announcement-item {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.unread-ann-title {
+  font-weight: 600;
+  font-size: 15px;
+  margin-bottom: 6px;
+}
+.unread-ann-content {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+  line-height: 1.6;
 }
 </style>

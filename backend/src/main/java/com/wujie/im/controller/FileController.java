@@ -1,7 +1,7 @@
 package com.wujie.im.controller;
 
 import com.wujie.im.common.Result;
-import com.wujie.im.service.MinioService;
+import com.wujie.im.util.FtpTool;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
@@ -16,7 +16,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class FileController {
 
-    private final MinioService minioService;
+    private final FtpTool ftpTool;
 
     private static final long MAX_IMAGE_SIZE = 10 * 1024 * 1024;
     private static final long MAX_FILE_SIZE = 50 * 1024 * 1024;
@@ -26,7 +26,7 @@ public class FileController {
         if (file.isEmpty()) return Result.error("文件不能为空");
         if (file.getSize() > MAX_IMAGE_SIZE) return Result.error("图片大小不能超过10MB");
 
-        String url = minioService.upload(file, "images");
+        String url = ftpTool.uploadMultipartFile(file, "images");
         if (url == null) return Result.error("图片上传失败，请稍后再试");
 
         Map<String, String> result = new HashMap<>();
@@ -41,7 +41,7 @@ public class FileController {
         if (file.isEmpty()) return Result.error("文件不能为空");
         if (file.getSize() > MAX_FILE_SIZE) return Result.error("文件大小不能超过50MB");
 
-        String url = minioService.upload(file, "files");
+        String url = ftpTool.uploadMultipartFile(file, "files");
         if (url == null) return Result.error("文件上传失败，请稍后再试");
 
         Map<String, String> result = new HashMap<>();

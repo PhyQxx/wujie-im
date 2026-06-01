@@ -56,7 +56,7 @@ public class GroupController {
         List<GroupMember> members = groupService.getGroupMembers(groupId);
         List<Map<String, Object>> result = new ArrayList<>();
         for (GroupMember m : members) {
-            User user = userMapper.selectById(m.getUserId());
+            User user = userService.getUserById(m.getUserId());
             Map<String, Object> item = new HashMap<>();
             item.put("id", m.getId());
             item.put("userId", m.getUserId());
@@ -65,7 +65,6 @@ public class GroupController {
             item.put("mutedUntil", m.getMutedUntil());
             item.put("joinTime", m.getJoinTime());
             if (user != null) {
-                user.setPassword(null);
                 item.put("user", user);
             }
             result.add(item);
