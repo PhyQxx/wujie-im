@@ -5,7 +5,7 @@ export const messageApi = {
     request.get('/message/list', { params }),
   send: (data: { conversationId: number; content: string; contentType: string; replyId?: number; meta?: string }) =>
     request.post('/message/send', data),
-  recall: (messageId: number) => request.put(`/message/${messageId}/recall`),
+  recall: (messageId: number, userId: number) => request.put(`/message/recall/${messageId}`, null, { params: { userId } }),
   uploadImage: (formData: FormData) =>
     request.post('/upload/image', formData, { headers: { 'Content-Type': 'multipart/form-data' } }),
   uploadFile: (formData: FormData) =>

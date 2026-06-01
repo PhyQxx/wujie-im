@@ -331,6 +331,11 @@ function formatTime(time: string) {
 // 切换会话时加载历史消息
 watch(currentConversation, (conv) => {
   if (conv) {
+    // 切换会话时清空输入框和回复状态
+    inputText.value = ''
+    replyingTo.value = null
+    pendingImages.value = []
+
     userHasScrolledUp.value = false // 重置滚动状态
     if (conv.type === 'GROUP') {
       groupStore.fetchMembers(conv.typeId)
@@ -338,6 +343,9 @@ watch(currentConversation, (conv) => {
     messageStore.fetchMessages(conv.id).then(() => {
       nextTick(() => {
         scrollToBottom()
+        // 自动聚焦输入框
+        isEditing.value = true
+        nextTick(() => textareaRef.value?.focus())
         // 记录初始滚动高度
         if (messageListRef.value) {
           (messageListRef.value as any).__oldScrollHeight = messageListRef.value.scrollHeight

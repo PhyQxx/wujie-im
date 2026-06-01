@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, nextTick } from 'vue'
 import type { Message } from '@/types'
 import request from '@/utils/request'
+import { messageApi } from '@/api/message'
 import wsClient from '@/utils/websocket'
 import { useConversationStore } from './conversation'
 
@@ -204,7 +205,8 @@ export const useMessageStore = defineStore('message', () => {
   }
 
   async function recallMessage(messageId: number) {
-    await request.put(`/message/${messageId}/recall`)
+    const userId = Number(localStorage.getItem('userId'))
+    await messageApi.recall(messageId, userId)
     const msg = messages.value.find(m => m.id === messageId)
     if (msg) { 
       msg.recall = true
