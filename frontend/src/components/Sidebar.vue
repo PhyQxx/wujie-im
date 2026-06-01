@@ -22,7 +22,7 @@
         class="user-avatar"
         @click="$emit('change', 'settings')"
       >
-        {{ userStore.currentUser?.username?.[0] }}
+        {{ (userStore.currentUser?.nickname || userStore.currentUser?.username)?.[0] }}
       </el-avatar>
     </div>
   </div>

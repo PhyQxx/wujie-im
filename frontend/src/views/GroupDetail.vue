@@ -22,11 +22,11 @@
           class="member-item"
         >
           <div class="member-avatar" :style="{ background: getAvatarBg(m) }">
-            {{ m.user?.username?.[0] || '?' }}
+            {{ (m.user?.nickname || m.user?.username)?.[0] || '?' }}
           </div>
           <div class="member-info">
             <div class="member-name">
-              {{ m.user?.username }}
+              {{ m.user?.nickname || m.user?.username }}
               <el-tag v-if="m.role === 'OWNER'" type="danger" size="small">群主</el-tag>
               <el-tag v-else-if="m.role === 'ADMIN'" type="warning" size="small">管理员</el-tag>
             </div>
@@ -41,9 +41,9 @@
       <div v-else class="chat-record-list">
         <div v-if="!chatRecords.length" class="empty">暂无聊天记录</div>
         <div v-for="msg in chatRecords" :key="msg.id" class="chat-record-item">
-          <div class="record-avatar">{{ msg.sender?.username?.[0] }}</div>
+          <div class="record-avatar">{{ (msg.sender?.nickname || msg.sender?.username)?.[0] }}</div>
           <div class="record-info">
-            <div class="record-name">{{ msg.sender?.username }}</div>
+            <div class="record-name">{{ msg.sender?.nickname || msg.sender?.username }}</div>
             <div class="record-content">{{ msg.content }}</div>
           </div>
           <div class="record-time">{{ formatTime(msg.createTime) }}</div>
@@ -127,11 +127,11 @@
         <div class="member-manage-list">
           <div v-for="m in members" :key="m.userId" class="member-manage-item">
             <div class="member-avatar small" :style="{ background: getAvatarBg(m) }">
-              {{ m.user?.username?.[0] || '?' }}
+              {{ (m.user?.nickname || m.user?.username)?.[0] || '?' }}
             </div>
             <div class="member-info">
               <div class="member-name">
-                {{ m.user?.username }}
+                {{ m.user?.nickname || m.user?.username }}
                 <el-tag v-if="m.role === 'OWNER'" type="danger" size="small">群主</el-tag>
                 <el-tag v-else-if="m.role === 'ADMIN'" type="warning" size="small">管理员</el-tag>
               </div>

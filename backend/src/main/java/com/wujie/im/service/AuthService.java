@@ -24,7 +24,7 @@ public class AuthService {
     private JwtUtil jwtUtil;
     private BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
 
-    public Map<String, String> register(String username, String password, String phone, String email) {
+    public Map<String, String> register(String username, String password, String phone, String email, String nickname, String userType) {
         User exist = userMapper.selectOne(
                 new LambdaQueryWrapper<User>().eq(User::getUsername, username)
         );
@@ -38,12 +38,13 @@ public class AuthService {
         user.setEmail(email);
         user.setStatus(1);
         user.setRole("USER");
+        user.setUserType(userType != null ? userType : "PERSONAL");
         user.setUserStatus("OFFLINE");
         userMapper.insert(user);
 
         UserProfile profile = new UserProfile();
         profile.setUserId(user.getId());
-        profile.setNickname(username);
+        profile.setNickname(nickname != null ? nickname : username);
         userProfileMapper.insert(profile);
 
         Map<String, String> result = new HashMap<>();

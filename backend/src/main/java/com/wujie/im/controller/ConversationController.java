@@ -1,12 +1,15 @@
 package com.wujie.im.controller;
 
 import com.wujie.im.common.Result;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.wujie.im.entity.Conversation;
 import com.wujie.im.entity.GroupInfo;
 import com.wujie.im.entity.Message;
 import com.wujie.im.entity.User;
+import com.wujie.im.entity.UserProfile;
 import com.wujie.im.mapper.GroupInfoMapper;
 import com.wujie.im.mapper.UserMapper;
+import com.wujie.im.mapper.UserProfileMapper;
 import com.wujie.im.service.ConversationService;
 import com.wujie.im.service.MessageService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -24,6 +27,8 @@ public class ConversationController {
     @Autowired
     private UserMapper userMapper;
     @Autowired
+    private UserProfileMapper userProfileMapper;
+    @Autowired
     private GroupInfoMapper groupInfoMapper;
     @Autowired
     private com.wujie.im.common.JwtUtil jwtUtil;
@@ -35,7 +40,15 @@ public class ConversationController {
         for (Conversation conv : list) {
             if ("SINGLE".equals(conv.getType())) {
                 User target = userMapper.selectById(conv.getTypeId());
-                if (target != null) target.setPassword(null);
+                if (target != null) {
+                    target.setPassword(null);
+                    UserProfile profile = userProfileMapper.selectOne(
+                            new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, target.getId())
+                    );
+                    if (profile != null) {
+                        target.setNickname(profile.getNickname());
+                    }
+                }
                 conv.setTargetUser(target);
             } else {
                 GroupInfo group = groupInfoMapper.selectById(conv.getTypeId());

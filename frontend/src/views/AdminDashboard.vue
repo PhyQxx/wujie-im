@@ -99,12 +99,15 @@
         <h3>用户管理</h3>
         <div style="display:flex;gap:8px;">
           <el-button type="primary" size="small" @click="openCreateUserDialog">创建用户</el-button>
+          <el-button type="danger" size="small" :disabled="!selectedUserIds.length" @click="batchDeleteUsers">批量删除 ({{ selectedUserIds.length }})</el-button>
           <el-input v-model="userSearch" placeholder="搜索用户/手机号" style="width:200px" clearable @change="loadUsers" />
         </div>
       </div>
-      <el-table :data="users" stripe v-loading="loading">
+      <el-table :data="users" stripe v-loading="loading" @selection-change="handleUserSelectionChange">
+        <el-table-column type="selection" width="45" />
         <el-table-column prop="id" label="ID" width="60" />
         <el-table-column prop="username" label="用户名" />
+        <el-table-column prop="nickname" label="昵称" />
         <el-table-column prop="phone" label="手机号" />
         <el-table-column prop="createTime" label="注册时间" />
         <el-table-column label="状态" width="100">
@@ -114,13 +117,15 @@
             </el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="180">
+        <el-table-column label="操作" width="300">
           <template #default="{ row }">
+            <el-button size="small" @click="openEditUserDialog(row)">编辑</el-button>
             <el-button size="small" :type="row.status === 1 ? 'warning' : 'success'"
               @click="toggleUserStatus(row)">
               {{ row.status === 1 ? '禁用' : '启用' }}
             </el-button>
             <el-button size="small" type="danger" @click="resetPassword(row.id)">重置密码</el-button>
+            <el-button size="small" type="danger" @click="deleteUser(row)">删除</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -140,6 +145,27 @@
         <template #footer>
           <el-button @click="showCreateUserDialog = false">取消</el-button>
           <el-button type="primary" @click="createUser">创建</el-button>
+        </template>
+      </el-dialog>
+
+      <el-dialog v-model="showEditUserDialog" title="编辑用户" width="420px">
+        <el-form :model="editUserForm" label-width="80px">
+          <el-form-item label="用户名">
+            <el-input v-model="editUserForm.username" />
+          </el-form-item>
+          <el-form-item label="昵称">
+            <el-input v-model="editUserForm.nickname" />
+          </el-form-item>
+          <el-form-item label="邮箱">
+            <el-input v-model="editUserForm.email" />
+          </el-form-item>
+          <el-form-item label="手机号">
+            <el-input v-model="editUserForm.phone" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="showEditUserDialog = false">取消</el-button>
+          <el-button type="primary" @click="saveEditUser">保存</el-button>
         </template>
       </el-dialog>
     </div>
@@ -409,7 +435,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { adminApi } from '@/api/admin'
 import { groupApi } from '@/api/group'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
 const loading = ref(false)
@@ -460,6 +486,7 @@ const colors = [
 
 const users = ref<any[]>([])
 const userSearch = ref('')
+const selectedUserIds = ref<number[]>([])
 const groups = ref<any[]>([])
 const groupSearch = ref('')
 const robots = ref<any[]>([])
@@ -479,6 +506,10 @@ const systemConfigs = ref<any[]>([])
 // 创建用户
 const showCreateUserDialog = ref(false)
 const createUserForm = ref({ username: '', password: '', email: '' })
+
+// 编辑用户
+const showEditUserDialog = ref(false)
+const editUserForm = ref<any>({})
 
 // 创建群组
 const showCreateGroupDialog = ref(false)
@@ -710,6 +741,53 @@ async function toggleUserStatus(user: any) {
 async function resetPassword(userId: number) {
   await adminApi.resetPassword(userId, '123456')
   ElMessage.success('密码已重置为 123456')
+}
+
+function openEditUserDialog(row: any) {
+  editUserForm.value = {
+    id: row.id,
+    username: row.username,
+    nickname: row.nickname || '',
+    email: row.email || '',
+    phone: row.phone || ''
+  }
+  showEditUserDialog.value = true
+}
+
+async function saveEditUser() {
+  const { id, ...data } = editUserForm.value
+  try {
+    await adminApi.updateUser(id, data)
+    ElMessage.success('用户信息已更新')
+    showEditUserDialog.value = false
+    await loadUsers()
+  } catch (_e: any) {
+    ElMessage.error(_e?.response?.data?.msg || '更新失败')
+  }
+}
+
+function handleUserSelectionChange(rows: any[]) {
+  selectedUserIds.value = rows.map(r => r.id)
+}
+
+async function deleteUser(row: any) {
+  try {
+    await ElMessageBox.confirm(`确定删除用户「${row.nickname || row.username}」？`, '提示', { type: 'warning' })
+    await adminApi.deleteUser(row.id)
+    ElMessage.success('用户已删除')
+    await loadUsers()
+  } catch {}
+}
+
+async function batchDeleteUsers() {
+  if (!selectedUserIds.value.length) return
+  try {
+    await ElMessageBox.confirm(`确定删除选中的 ${selectedUserIds.value.length} 个用户？`, '提示', { type: 'warning' })
+    await adminApi.batchDeleteUsers(selectedUserIds.value)
+    ElMessage.success('批量删除成功')
+    selectedUserIds.value = []
+    await loadUsers()
+  } catch {}
 }
 
 async function dissolveGroup(group: any) {

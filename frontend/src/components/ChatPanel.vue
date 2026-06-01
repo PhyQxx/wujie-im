@@ -162,9 +162,9 @@
                 @mousedown.prevent="insertMention(m)"
               >
                 <div class="mention-avatar" :style="{ background: m.isAll ? '#F59E0B' : getAvatarBgFromUser(m.user) }">
-                  {{ m.isAll ? '📢' : m.user?.username?.[0] }}
+                  {{ m.isAll ? '📢' : (m.user?.nickname || m.user?.username)?.[0] }}
                 </div>
-                <span class="mention-name">{{ m.user?.username }}</span>
+                <span class="mention-name">{{ m.user?.nickname || m.user?.username }}</span>
               </div>
             </div>
           </transition>
@@ -406,7 +406,7 @@ function jumpToMessage(msgId: number) {
 
 function getConvName(conv: Conversation) {
   if (conv.type === 'GROUP') return conv.groupInfo?.name || '群组'
-  return conv.targetUser?.username || '用户'
+  return conv.targetUser?.nickname || conv.targetUser?.username || '用户'
 }
 function getAvatarInitial(conv: Conversation) {
   return getConvName(conv)[0] || '?'

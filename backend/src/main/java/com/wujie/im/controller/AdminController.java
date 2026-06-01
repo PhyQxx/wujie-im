@@ -42,6 +42,8 @@ public class AdminController {
     @Autowired
     private ConversationMapper conversationMapper;
     @Autowired
+    private UserProfileMapper userProfileMapper;
+    @Autowired
     private org.redisson.api.RedissonClient redissonClient;
     
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder();
@@ -144,7 +146,16 @@ public class AdminController {
             q.like(User::getUsername, keyword).or().like(User::getPhone, keyword);
         }
         List<User> users = userMapper.selectList(q);
-        users.forEach(u -> u.setPassword(null));
+        users.forEach(u -> {
+            u.setPassword(null);
+            // 查询昵称
+            UserProfile profile = userProfileMapper.selectOne(
+                    new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, u.getId())
+            );
+            if (profile != null) {
+                u.setNickname(profile.getNickname());
+            }
+        });
         return Result.success(users);
     }
 
@@ -165,6 +176,50 @@ public class AdminController {
             user.setPassword(encoder.encode(password));
             userMapper.updateById(user);
         }
+        return Result.success();
+    }
+
+    @PutMapping("/users/{userId}")
+    public Result<Void> updateUser(@PathVariable Long userId, @RequestBody Map<String, String> params) {
+        User user = userMapper.selectById(userId);
+        if (user == null) return Result.error("用户不存在");
+        if (params.containsKey("username")) user.setUsername(params.get("username"));
+        if (params.containsKey("email")) user.setEmail(params.get("email"));
+        if (params.containsKey("phone")) user.setPhone(params.get("phone"));
+        userMapper.updateById(user);
+        // 更新昵称
+        if (params.containsKey("nickname")) {
+            UserProfile profile = userProfileMapper.selectOne(
+                    new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, userId)
+            );
+            if (profile != null) {
+                profile.setNickname(params.get("nickname"));
+                userProfileMapper.updateById(profile);
+            } else {
+                profile = new UserProfile();
+                profile.setUserId(userId);
+                profile.setNickname(params.get("nickname"));
+                userProfileMapper.insert(profile);
+            }
+        }
+        return Result.success();
+    }
+
+    @DeleteMapping("/users/{userId}")
+    public Result<Void> deleteUser(@PathVariable Long userId) {
+        userMapper.deleteById(userId);
+        userProfileMapper.delete(
+                new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, userId)
+        );
+        return Result.success();
+    }
+
+    @DeleteMapping("/users/batch")
+    public Result<Void> batchDeleteUsers(@RequestBody List<Long> userIds) {
+        userMapper.deleteBatchIds(userIds);
+        userProfileMapper.delete(
+                new LambdaQueryWrapper<UserProfile>().in(UserProfile::getUserId, userIds)
+        );
         return Result.success();
     }
 

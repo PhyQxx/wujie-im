@@ -39,11 +39,11 @@
           <div v-for="req in pendingRequests" :key="req.id" class="request-item">
             <div class="contact-avatar-wrap">
               <div class="contact-avatar" :style="{ background: getAvatarBg(req.fromUser), color: getAvatarColor(req.fromUser) }">
-                {{ req.fromUser?.username?.[0] }}
+                {{ (req.fromUser?.nickname || req.fromUser?.username)?.[0] }}
               </div>
             </div>
             <div class="request-info">
-              <div class="request-name">{{ req.fromUser?.username }}</div>
+              <div class="request-name">{{ req.fromUser?.nickname || req.fromUser?.username }}</div>
               <div class="request-hint">{{ req.reason || '请求添加好友' }}</div>
             </div>
             <div class="request-actions">
@@ -66,12 +66,12 @@
             >
               <div class="contact-avatar-wrap">
                 <div class="contact-avatar" :style="{ background: getAvatarBg(friend), color: getAvatarColor(friend) }">
-                  {{ friend.username?.[0] }}
+                  {{ (friend.nickname || friend.username)?.[0] }}
                 </div>
                 <span class="online-dot" :class="friend.userStatus === 'ONLINE' ? 'online' : 'offline'"></span>
               </div>
               <div class="contact-info">
-                <div class="contact-name">{{ friend.username }}</div>
+                <div class="contact-name">{{ friend.nickname || friend.username }}</div>
                 <div class="contact-status-text">{{ getStatusText(friend) }}</div>
               </div>
             </div>
@@ -105,11 +105,11 @@
             <div class="contact-item">
               <div class="contact-avatar-wrap">
                 <div class="contact-avatar" :style="{ background: getAvatarBg(user), color: getAvatarColor(user) }">
-                  {{ user.username?.[0] }}
+                  {{ (user.nickname || user.username)?.[0] }}
                 </div>
               </div>
               <div class="contact-info">
-                <div class="contact-name">{{ user.username }}</div>
+                <div class="contact-name">{{ user.nickname || user.username }}</div>
                 <div class="contact-status-text">黑名单</div>
               </div>
             </div>
@@ -126,10 +126,10 @@
       <template v-if="selectedFriend && tab === 'friends'">
         <div class="detail-header">
           <div class="detail-avatar" :style="{ background: getAvatarBg(selectedFriend), color: getAvatarColor(selectedFriend) }">
-            {{ selectedFriend.username?.[0] }}
+            {{ (selectedFriend.nickname || selectedFriend.username)?.[0] }}
           </div>
           <div class="detail-info">
-            <h2>{{ selectedFriend.username }}</h2>
+            <h2>{{ selectedFriend.nickname || selectedFriend.username }}</h2>
             <p>{{ getStatusText(selectedFriend) }}</p>
           </div>
           <div class="detail-actions">
@@ -225,11 +225,11 @@
           <div class="member-manage-list">
             <div v-for="m in groupMembers" :key="m.userId" class="member-manage-item">
               <div class="contact-avatar small" :style="{ background: getAvatarBg(m.user), color: getAvatarColor(m.user) }">
-                {{ m.user?.username?.[0] || '?' }}
+                {{ (m.user?.nickname || m.user?.username)?.[0] || '?' }}
               </div>
               <div class="member-info">
                 <div class="member-name">
-                  {{ m.user?.username }}
+                  {{ m.user?.nickname || m.user?.username }}
                   <el-tag v-if="m.role === 'OWNER'" type="danger" size="small">群主</el-tag>
                   <el-tag v-else-if="m.role === 'ADMIN'" type="warning" size="small">管理员</el-tag>
                 </div>
@@ -255,9 +255,9 @@
       <div class="search-results">
         <div v-for="u in searchResults" :key="u.id" class="search-item">
           <div class="contact-avatar small" :style="{ background: getAvatarBg(u), color: getAvatarColor(u) }">
-            {{ u.username?.[0] }}
+            {{ (u.nickname || u.username)?.[0] }}
           </div>
-          <span class="s-name">{{ u.username }}</span>
+          <span class="s-name">{{ u.nickname || u.username }}</span>
           <el-button type="primary" size="small" @click="sendRequest(u.id)">添加</el-button>
         </div>
       </div>
@@ -355,7 +355,7 @@ const filteredFriends = computed(() => {
 const groupedFriends = computed(() => {
   const groups: Record<string, User[]> = {}
   filteredFriends.value.forEach(f => {
-    const letter = (f.username?.[0] || '#').toUpperCase()
+    const letter = ((f.nickname || f.username)?.[0] || '#').toUpperCase()
     if (!groups[letter]) groups[letter] = []
     groups[letter].push(f)
   })

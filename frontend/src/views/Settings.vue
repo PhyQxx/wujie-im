@@ -28,7 +28,7 @@
         <h3 class="panel-title">个人资料</h3>
         <div class="profile-avatar">
           <div class="avatar-circle" :style="{ background: avatarBg }">
-            {{ userStore.currentUser?.username?.[0] }}
+            {{ (userStore.currentUser?.nickname || userStore.currentUser?.username)?.[0] }}
           </div>
         </div>
         <div class="form-group">

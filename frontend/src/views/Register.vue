@@ -22,45 +22,51 @@
 
           <el-form ref="formRef" :model="form" :rules="rules" @submit.prevent="handleRegister">
             <div class="form-row">
-              <div class="form-group">
+              <el-form-item prop="username" class="form-group">
                 <label>用户名</label>
                 <div class="input-wrapper">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
                   <el-input v-model="form.username" placeholder="设置用户名" size="large" />
+                  <el-button class="refresh-btn" size="small" circle @click="form.username = generateRandomUsername()" title="重新生成">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:14px;height:14px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  </el-button>
                 </div>
-              </div>
-              <div class="form-group">
+              </el-form-item>
+              <el-form-item prop="nickname" class="form-group">
                 <label>昵称</label>
                 <div class="input-wrapper">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"></path></svg>
                   <el-input v-model="form.nickname" placeholder="显示昵称" size="large" />
+                  <el-button class="refresh-btn" size="small" circle @click="form.nickname = generateRandomNickname()" title="重新生成">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" style="width:14px;height:14px"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                  </el-button>
                 </div>
-              </div>
+              </el-form-item>
             </div>
 
-            <div class="form-group">
+            <el-form-item prop="email" class="form-group">
               <label>邮箱</label>
               <div class="input-wrapper">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
                 <el-input v-model="form.email" placeholder="请输入邮箱" size="large" />
               </div>
-            </div>
+            </el-form-item>
 
             <div class="form-row">
-              <div class="form-group">
+              <el-form-item prop="password" class="form-group">
                 <label>密码</label>
                 <div class="input-wrapper">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path></svg>
                   <el-input v-model="form.password" type="password" placeholder="设置密码" size="large" show-password />
                 </div>
-              </div>
-              <div class="form-group">
+              </el-form-item>
+              <el-form-item prop="confirmPassword" class="form-group">
                 <label>确认密码</label>
                 <div class="input-wrapper">
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
                   <el-input v-model="form.confirmPassword" type="password" placeholder="再次输入" size="large" show-password />
                 </div>
-              </div>
+              </el-form-item>
             </div>
 
             <div class="form-group">
@@ -109,14 +115,30 @@ const formRef = ref()
 const loading = ref(false)
 
 const form = ref({
-  username: '',
-  nickname: '',
+  username: generateRandomUsername(),
+  nickname: generateRandomNickname(),
   email: '',
   password: '',
   confirmPassword: '',
   userType: 'PERSONAL',
   agreeTerms: false
 })
+
+function generateRandomUsername(): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  const prefix = 'user_'
+  let suffix = ''
+  for (let i = 0; i < 8; i++) {
+    suffix += chars.charAt(Math.floor(Math.random() * chars.length))
+  }
+  return prefix + suffix
+}
+
+function generateRandomNickname(): string {
+  const adjectives = ['快乐的', '聪明的', '勇敢的', '温柔的', '可爱的', '酷酷的', '活力的', '阳光的']
+  const nouns = ['小熊', '小鱼', '飞鸟', '星星', '月亮', '小猫', '小鹿', '海豚']
+  return adjectives[Math.floor(Math.random() * adjectives.length)] + nouns[Math.floor(Math.random() * nouns.length)]
+}
 
 const validateConfirmPwd = (_rule: any, value: string, callback: Function) => {
   if (value !== form.value.password) {
@@ -130,6 +152,10 @@ const rules = {
   username: [
     { required: true, message: '请输入用户名', trigger: 'blur' },
     { min: 3, max: 20, message: '用户名长度 3-20', trigger: 'blur' }
+  ],
+  nickname: [
+    { required: true, message: '请输入昵称', trigger: 'blur' },
+    { min: 1, max: 20, message: '昵称长度 1-20', trigger: 'blur' }
   ],
   email: [
     { required: true, message: '请输入邮箱', trigger: 'blur' },
@@ -274,6 +300,9 @@ async function handleRegister() {
 .form-row .form-group { flex: 1; }
 .form-group { margin-bottom: 14px; }
 .form-group label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px; }
+:deep(.el-form-item) { flex-direction: column; margin-bottom: 0; }
+:deep(.el-form-item__label) { display: none; }
+:deep(.el-form-item__content) { margin-left: 0 !important; }
 .input-wrapper { position: relative; }
 .input-wrapper svg {
   position: absolute;
@@ -288,6 +317,22 @@ async function handleRegister() {
 }
 .input-wrapper :deep(.el-input__wrapper) {
   padding-left: 40px !important;
+  padding-right: 36px !important;
+}
+.refresh-btn {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  border: none;
+  background: transparent;
+  color: #9CA3AF;
+  padding: 4px;
+}
+.refresh-btn:hover {
+  color: #4F46E5;
+  background: #EEF2FF;
 }
 .terms-check {
   display: flex;

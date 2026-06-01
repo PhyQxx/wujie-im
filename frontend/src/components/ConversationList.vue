@@ -62,7 +62,7 @@ const filteredConversations = computed(() => {
 
 function getName(conv: Conversation) {
   if (conv.type === 'GROUP') return conv.groupInfo?.name || '群组'
-  return conv.targetUser?.username || '用户'
+  return conv.targetUser?.nickname || conv.targetUser?.username || '用户'
 }
 
 function getInitial(conv: Conversation) {

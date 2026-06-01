@@ -77,7 +77,7 @@
       <!-- 用户头像 -->
       <div class="sidebar-footer">
         <div class="user-avatar" @click="$router.push('/settings')">
-          {{ userStore.currentUser?.username?.[0] || '用' }}
+          {{ (userStore.currentUser?.nickname || userStore.currentUser?.username)?.[0] || '用' }}
         </div>
       </div>
     </div>

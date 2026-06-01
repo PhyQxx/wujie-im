@@ -1,8 +1,8 @@
 <template>
   <div class="contact-item">
-    <el-avatar :size="40" :src="user.avatar">{{ user.username?.[0] }}</el-avatar>
+    <el-avatar :size="40" :src="user.avatar">{{ (user.nickname || user.username)?.[0] }}</el-avatar>
     <div class="contact-info">
-      <span class="name">{{ user.username }}<el-tag v-if="user.role === 'ROBOT'" size="small" type="success" style="margin-left:4px">AI</el-tag></span>
+      <span class="name">{{ user.nickname || user.username }}<el-tag v-if="user.role === 'ROBOT'" size="small" type="success" style="margin-left:4px">AI</el-tag></span>
       <span class="status" :class="user.userStatus?.toLowerCase()">{{ statusText }}</span>
     </div>
     <div class="contact-actions">

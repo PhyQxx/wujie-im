@@ -11,6 +11,12 @@ export const adminApi = {
     request.put(`/admin/users/${userId}/status?status=${status}`),
   resetPassword: (userId: number, password: string) =>
     request.put(`/admin/users/${userId}/password?password=${encodeURIComponent(password)}`),
+  updateUser: (userId: number, data: Record<string, string>) =>
+    request.put(`/admin/users/${userId}`, data),
+  deleteUser: (userId: number) =>
+    request.delete(`/admin/users/${userId}`),
+  batchDeleteUsers: (userIds: number[]) =>
+    request.delete('/admin/users/batch', { data: userIds }),
   register: (data: { username: string; password: string; email?: string }) =>
     request.post('/auth/register', data),
 

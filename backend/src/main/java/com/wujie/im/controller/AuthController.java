@@ -19,7 +19,9 @@ public class AuthController {
                     params.get("username"),
                     params.get("password"),
                     params.get("phone"),
-                    params.get("email")
+                    params.get("email"),
+                    params.get("nickname"),
+                    params.get("userType")
             ));
         } catch (RuntimeException e) {
             return Result.error(400, e.getMessage());

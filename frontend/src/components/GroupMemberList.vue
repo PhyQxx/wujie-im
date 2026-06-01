@@ -9,9 +9,9 @@
     </div>
     <div class="members">
       <div v-for="m in filteredMembers" :key="m.id" class="member-item">
-        <el-avatar :size="36" :src="m.user?.avatar">{{ m.user?.username?.[0] }}</el-avatar>
+        <el-avatar :size="36" :src="m.user?.avatar">{{ (m.user?.nickname || m.user?.username)?.[0] }}</el-avatar>
         <div class="member-info">
-          <span class="member-name">{{ m.user?.username }}</span>
+          <span class="member-name">{{ m.user?.nickname || m.user?.username }}</span>
           <el-tag size="small" :type="roleType(m.role)">{{ roleLabel(m.role) }}</el-tag>
           <el-tag v-if="m.muted" type="warning" size="small">已禁言</el-tag>
         </div>
@@ -41,8 +41,8 @@
       <el-input v-model="searchUserKey" placeholder="搜索用户" @input="searchUsers" />
       <div class="user-list">
         <div v-for="u in searchResults" :key="u.id" class="user-item">
-          <el-avatar :size="32" :src="u.avatar">{{ u.username?.[0] }}</el-avatar>
-          <span class="u-name">{{ u.username }}</span>
+          <el-avatar :size="32" :src="u.avatar">{{ (u.nickname || u.username)?.[0] }}</el-avatar>
+          <span class="u-name">{{ u.nickname || u.username }}</span>
           <el-button size="small" type="primary" @click="inviteUser(u.id)">邀请</el-button>
         </div>
       </div>

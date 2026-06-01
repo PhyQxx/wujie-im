@@ -40,6 +40,8 @@ public class MessageService {
     @Autowired
     private UserMapper userMapper;
     @Autowired
+    private UserProfileMapper userProfileMapper;
+    @Autowired
     @org.springframework.context.annotation.Lazy
     private RobotMessageHandler robotMessageHandler;
     @Autowired
@@ -101,6 +103,13 @@ public class MessageService {
         User senderUser = userMapper.selectById(msg.getSenderId());
         if (senderUser != null) {
             senderName = senderUser.getUsername();
+            // 优先使用昵称
+            UserProfile profile = userProfileMapper.selectOne(
+                    new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, senderUser.getId())
+            );
+            if (profile != null && profile.getNickname() != null) {
+                senderName = profile.getNickname();
+            }
         }
 
         if ("SINGLE".equals(conv.getType())) {

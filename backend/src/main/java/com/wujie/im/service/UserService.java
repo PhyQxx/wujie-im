@@ -31,7 +31,16 @@ public class UserService {
         // 允许搜索状态为1的用户，或者角色为ROBOT的用户
         q.and(wrapper -> wrapper.eq(User::getStatus, 1).or().eq(User::getRole, "ROBOT"));
         List<User> users = userMapper.selectList(q);
-        users.forEach(u -> u.setPassword(null));
+        users.forEach(u -> {
+            u.setPassword(null);
+            UserProfile profile = userProfileMapper.selectOne(
+                    new LambdaQueryWrapper<UserProfile>().eq(UserProfile::getUserId, u.getId())
+            );
+            if (profile != null) {
+                u.setNickname(profile.getNickname());
+                u.setAvatar(profile.getAvatar());
+            }
+        });
         return users;
     }
 

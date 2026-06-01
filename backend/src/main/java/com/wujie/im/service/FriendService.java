@@ -28,6 +28,8 @@ public class FriendService {
     @Autowired
     private UserMapper userMapper;
     @Autowired
+    private com.wujie.im.mapper.UserProfileMapper userProfileMapper;
+    @Autowired
     private NotificationService notificationService;
     @Autowired
     private WsHandler wsHandler;
@@ -130,7 +132,17 @@ public class FriendService {
         );
         return relations.stream().map(r -> {
             User u = userMapper.selectById(r.getFriendId());
-            if (u != null) u.setPassword(null);
+            if (u != null) {
+                u.setPassword(null);
+                com.wujie.im.entity.UserProfile profile = userProfileMapper.selectOne(
+                        new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<com.wujie.im.entity.UserProfile>()
+                                .eq(com.wujie.im.entity.UserProfile::getUserId, u.getId())
+                );
+                if (profile != null) {
+                    u.setNickname(profile.getNickname());
+                    u.setAvatar(profile.getAvatar());
+                }
+            }
             Map<String, Object> map = new HashMap<>();
             map.put("user", u);
             map.put("groupId", r.getGroupId());
