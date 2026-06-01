@@ -300,9 +300,10 @@ async function handleRegister() {
 .form-row .form-group { flex: 1; }
 .form-group { margin-bottom: 14px; }
 .form-group label { display: block; font-size: 13px; font-weight: 500; color: #374151; margin-bottom: 6px; }
-:deep(.el-form-item) { flex-direction: column; margin-bottom: 0; }
-:deep(.el-form-item__label) { display: none; }
-:deep(.el-form-item__content) { margin-left: 0 !important; }
+:deep(.el-form-item) { display: block !important; margin-bottom: 0 !important; }
+:deep(.el-form-item__label) { display: none !important; }
+:deep(.el-form-item__content) { margin-left: 0 !important; display: block !important; }
+:deep(.el-form-item__error) { padding-top: 2px; position: relative !important; }
 .input-wrapper { position: relative; }
 .input-wrapper svg {
   position: absolute;

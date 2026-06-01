@@ -651,7 +651,7 @@ function insertMention(member: any) {
   const textAfter = inputText.value.substring(pos)
   
   const lastAtIdx = textBefore.lastIndexOf('@')
-  const mentionName = member.isAll ? '全体成员' : member.user.username
+  const mentionName = member.isAll ? '全体成员' : (member.user?.nickname || member.user.username)
   const newTextBefore = textBefore.substring(0, lastAtIdx) + `@${mentionName} `
   
   inputText.value = newTextBefore + textAfter
