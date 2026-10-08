@@ -73,15 +73,12 @@
           <div class="divider">或</div>
 
           <div class="social-login">
-            <button class="social-btn">
-              <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12.545,10.239v3.821h5.445c-0.712,2.315-2.647,3.972-5.445,3.972c-3.332,0-6.033-2.701-6.033-6.032s2.701-6.032 6.033-6.032c1.498,0 2.866,0.549 3.921,1.453l2.814-2.814C17.503,2.988,15.139,2,12.545,2C7.021,2,2.543,6.477,2.543,12s4.478,10,10.002,10c8.396,0,10.249-7.85,9.426-11.748L12.545,10.239z"></path></svg>
-              Google
-            </button>
-            <button class="social-btn">
-              <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0012 2z"></path></svg>
-              GitHub
+            <button class="social-btn" style="width: 100%; justify-content: center" @click="loginWithPnkx">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+              使用 pnkx 账号登录
             </button>
           </div>
+          <el-alert v-if="ssoError" type="error" :title="ssoError" show-icon :closable="false" style="margin-top: 12px" />
 
           <div class="register-prompt">
             还没有账号？<router-link to="/register">立即注册</router-link>
@@ -93,8 +90,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ElMessage } from 'element-plus'
 
@@ -104,6 +101,8 @@ const formRef = ref()
 const loading = ref(false)
 
 const form = ref({ username: '', password: '', remember: false })
+const route = useRoute()
+const ssoError = ref('')
 const rules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
@@ -122,6 +121,17 @@ async function handleLogin() {
   } finally {
     loading.value = false
   }
+}
+
+onMounted(() => {
+  if (route.query.sso_error) {
+    ssoError.value = String(route.query.sso_error)
+  }
+})
+
+// 跳转后端发起 pnkx OIDC 授权码流程，完成后回跳 /sso/callback#access_token=...
+function loginWithPnkx() {
+  window.location.href = '/api/auth/sso/login'
 }
 </script>
 

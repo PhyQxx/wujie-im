@@ -52,6 +52,54 @@ public class AuthService {
         return result;
     }
 
+    /**
+     * pnkx 统一登录（OIDC）：按 sso_id 查号，未命中 JIT 建号（user + user_profile），
+     * 签发本系统双 token。用户名冲突追加后缀，绝不绑定同名本地账号（防接管）。
+     */
+    public Map<String, String> loginWithSso(String ssoId, String preferredUsername, String displayName, boolean pnkxAdmin) {
+        User user = userMapper.selectOne(
+                new LambdaQueryWrapper<User>().eq(User::getSsoId, ssoId)
+        );
+        if (user == null) {
+            String username = (preferredUsername != null && !preferredUsername.isBlank())
+                    ? preferredUsername : "pnkx-" + ssoId;
+            Long count = userMapper.selectCount(
+                    new LambdaQueryWrapper<User>().eq(User::getUsername, username)
+            );
+            if (count != null && count > 0) {
+                username = username + "_" + ssoId;
+            }
+            user = new User();
+            user.setUsername(username);
+            user.setSsoId(ssoId);
+            // 随机密码占位：SSO 用户不走本地密码登录
+            user.setPassword(encoder.encode(java.util.UUID.randomUUID().toString()));
+            user.setStatus(1);
+            user.setRole(pnkxAdmin ? "ADMIN" : "USER");
+            user.setUserType("PERSONAL");
+            user.setUserStatus("OFFLINE");
+            userMapper.insert(user);
+
+            UserProfile profile = new UserProfile();
+            profile.setUserId(user.getId());
+            profile.setNickname((displayName != null && !displayName.isBlank()) ? displayName : username);
+            userProfileMapper.insert(profile);
+            log.info("SSO JIT user created: username={} ssoId={} admin={}", username, ssoId, pnkxAdmin);
+        }
+        if (user.getStatus() != 1) {
+            throw new RuntimeException("账号已被禁用");
+        }
+        String accessToken = jwtUtil.generateAccessToken(user.getId(), user.getUsername());
+        String refreshToken = jwtUtil.generateRefreshToken(user.getId(), user.getUsername());
+        Map<String, String> result = new HashMap<>();
+        result.put("accessToken", accessToken);
+        result.put("refreshToken", refreshToken);
+        result.put("userId", String.valueOf(user.getId()));
+        result.put("username", user.getUsername());
+        result.put("role", user.getRole() != null ? user.getRole() : "USER");
+        return result;
+    }
+
     public Map<String, String> login(String username, String password) {
         User user = userMapper.selectOne(
                 new LambdaQueryWrapper<User>()

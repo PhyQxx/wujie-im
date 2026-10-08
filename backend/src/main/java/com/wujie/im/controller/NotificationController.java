@@ -15,12 +15,16 @@ public class NotificationController {
     private NotificationService notificationService;
 
     @GetMapping("/list/{userId}")
-    public Result<List<Notification>> getNotifications(@PathVariable Long userId) {
+    public Result<List<Notification>> getNotifications(@PathVariable Long userId,
+                                                       jakarta.servlet.http.HttpServletRequest request) {
+        userId = currentUserId(request);
         return Result.success(notificationService.getNotifications(userId));
     }
 
     @GetMapping("/unread/{userId}")
-    public Result<List<Notification>> getUnread(@PathVariable Long userId) {
+    public Result<List<Notification>> getUnread(@PathVariable Long userId,
+                                                jakarta.servlet.http.HttpServletRequest request) {
+        userId = currentUserId(request);
         return Result.success(notificationService.getUnread(userId));
     }
 
@@ -40,5 +44,8 @@ public class NotificationController {
                 params.get("sourceId") != null ? Long.valueOf(params.get("sourceId").toString()) : null
         );
         return Result.success();
+    }
+    private Long currentUserId(jakarta.servlet.http.HttpServletRequest request) {
+        return (Long) request.getAttribute(com.wujie.im.common.JwtAuthInterceptor.ATTR_USER_ID);
     }
 }

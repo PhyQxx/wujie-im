@@ -30,8 +30,6 @@ public class ConversationController {
     private UserProfileMapper userProfileMapper;
     @Autowired
     private GroupInfoMapper groupInfoMapper;
-    @Autowired
-    private com.wujie.im.common.JwtUtil jwtUtil;
 
     @GetMapping("/list/{userId}")
     public Result<List<Conversation>> getConversations(@PathVariable Long userId) {
@@ -60,11 +58,9 @@ public class ConversationController {
 
     @PostMapping("/single")
     public Result<Conversation> createSingleConversation(@RequestBody Map<String, Object> params,
-                                                        @RequestHeader(value = "Authorization", required = false) String auth) {
-        Long userId = toLong(params.get("userId"));
-        if (userId == null && auth != null && auth.startsWith("Bearer ")) {
-            userId = jwtUtil.getUserId(auth.substring(7));
-        }
+                                                         jakarta.servlet.http.HttpServletRequest request) {
+        // 身份以 token 为准
+        Long userId = currentUserId(request);
         return Result.success(conversationService.getOrCreateSingleConversation(
                 userId, toLong(params.get("otherUserId"))
         ));
@@ -72,11 +68,8 @@ public class ConversationController {
 
     @PostMapping("/group")
     public Result<Conversation> createGroupConversation(@RequestBody Map<String, Object> params,
-                                                       @RequestHeader(value = "Authorization", required = false) String auth) {
-        Long userId = toLong(params.get("userId"));
-        if (userId == null && auth != null && auth.startsWith("Bearer ")) {
-            userId = jwtUtil.getUserId(auth.substring(7));
-        }
+                                                        jakarta.servlet.http.HttpServletRequest request) {
+        Long userId = currentUserId(request);
         Conversation conv = conversationService.getOrCreateGroupConversation(
                 userId, toLong(params.get("groupId"))
         );
@@ -116,5 +109,8 @@ public class ConversationController {
         if (val instanceof Long) return (Long) val;
         if (val instanceof Integer) return ((Integer) val).longValue();
         return Long.parseLong(val.toString());
+    }
+    private Long currentUserId(jakarta.servlet.http.HttpServletRequest request) {
+        return (Long) request.getAttribute(com.wujie.im.common.JwtAuthInterceptor.ATTR_USER_ID);
     }
 }

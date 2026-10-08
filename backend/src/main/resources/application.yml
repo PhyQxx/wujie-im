@@ -64,3 +64,11 @@ ftp:
   password: ${FTP_PASSWORD:}
   path: ${FTP_PATH:/ftp/}
   url-prefix: ${FTP_URL_PREFIX:}
+
+# pnkx 统一登录（SSO）：issuer/client/secret 三项齐备才启用
+sso:
+  issuer: ${SSO_ISSUER:http://localhost:8068}
+  client-id: ${SSO_CLIENT_ID:wujie-im}
+  client-secret: ${SSO_CLIENT_SECRET:}
+  # 登录成功后携带令牌（URL fragment）回跳的前端地址
+  frontend-uri: ${SSO_FRONTEND_URI:http://localhost:3000}

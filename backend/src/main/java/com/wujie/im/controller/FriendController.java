@@ -17,21 +17,18 @@ public class FriendController {
     private FriendService friendService;
     @Autowired
     private UserMapper userMapper;
-    @Autowired
-    private com.wujie.im.common.JwtUtil jwtUtil;
 
     @PostMapping("/request")
     public Result<Void> sendRequest(@RequestBody Map<String, Object> params,
-                                   @RequestHeader(value = "Authorization", required = false) String auth) {
+                                    jakarta.servlet.http.HttpServletRequest request) {
         try {
-            Long fromUserId = params.get("fromUserId") != null ? Long.valueOf(params.get("fromUserId").toString()) : null;
-            if (fromUserId == null && auth != null && auth.startsWith("Bearer ")) {
-                fromUserId = jwtUtil.getUserId(auth.substring(7));
-            }
+            // 身份一律取自 token（拦截器已鉴权），body 中的 fromUserId 仅作兼容忽略
+            Long fromUserId = currentUserId(request);
             Long toUserId = params.get("toUserId") != null ? Long.valueOf(params.get("toUserId").toString()) : null;
             if (fromUserId == null || toUserId == null) {
-                return Result.error(400, "缺少必要参数 fromUserId 或 toUserId");
+                return Result.error(400, "缺少必要参数 toUserId");
             }
+
             friendService.sendRequest(fromUserId, toUserId, (String) params.get("reason"));
             return Result.success("申请已发送", null);
         } catch (RuntimeException e) {
@@ -41,10 +38,9 @@ public class FriendController {
 
     @GetMapping("/requests/{userId}")
     public Result<List<FriendRequest>> getRequests(@PathVariable Long userId,
-                                                  @RequestHeader(value = "Authorization", required = false) String auth) {
-        if ((userId == null || userId == 0) && auth != null && auth.startsWith("Bearer ")) {
-            userId = jwtUtil.getUserId(auth.substring(7));
-        }
+                                                   jakarta.servlet.http.HttpServletRequest request) {
+        // 路径参数仅保留兼容，实际身份以 token 为准（防越权查他人申请）
+        userId = currentUserId(request);
         List<FriendRequest> requests = friendService.getRequests(userId);
         // 填充申请人用户信息
         for (FriendRequest req : requests) {
@@ -63,23 +59,25 @@ public class FriendController {
 
     @GetMapping("/list/{userId}")
     public Result<List<Map<String, Object>>> getFriends(@PathVariable Long userId,
-                                                       @RequestHeader(value = "Authorization", required = false) String auth) {
-        if ((userId == null || userId == 0) && auth != null && auth.startsWith("Bearer ")) {
-            userId = jwtUtil.getUserId(auth.substring(7));
-        }
+                                                        jakarta.servlet.http.HttpServletRequest request) {
+        // 实际身份以 token 为准
+        userId = currentUserId(request);
         return Result.success(friendService.getFriends(userId));
     }
 
     @DeleteMapping("/{userId}/{friendId}")
-    public Result<Void> deleteFriend(@PathVariable Long userId, @PathVariable Long friendId) {
+    public Result<Void> deleteFriend(@PathVariable Long userId, @PathVariable Long friendId,
+                                     jakarta.servlet.http.HttpServletRequest request) {
+        userId = currentUserId(request);
         friendService.deleteFriend(userId, friendId);
         return Result.success();
     }
 
     @PutMapping("/move")
-    public Result<Void> moveFriendToGroup(@RequestBody Map<String, Object> params) {
+    public Result<Void> moveFriendToGroup(@RequestBody Map<String, Object> params,
+                                          jakarta.servlet.http.HttpServletRequest request) {
         friendService.moveFriendToGroup(
-                Long.valueOf(params.get("userId").toString()),
+                currentUserId(request),
                 Long.valueOf(params.get("friendId").toString()),
                 Long.valueOf(params.get("groupId").toString())
         );
@@ -87,12 +85,17 @@ public class FriendController {
     }
 
     @PutMapping("/remark")
-    public Result<Void> setFriendRemark(@RequestBody Map<String, Object> params) {
+    public Result<Void> setFriendRemark(@RequestBody Map<String, Object> params,
+                                        jakarta.servlet.http.HttpServletRequest request) {
         friendService.setFriendRemark(
-                Long.valueOf(params.get("userId").toString()),
+                currentUserId(request),
                 Long.valueOf(params.get("friendId").toString()),
                 (String) params.get("remark")
         );
         return Result.success();
+    }
+
+    private Long currentUserId(jakarta.servlet.http.HttpServletRequest request) {
+        return (Long) request.getAttribute(com.wujie.im.common.JwtAuthInterceptor.ATTR_USER_ID);
     }
 }

@@ -20,17 +20,12 @@ public class RobotController {
     private RobotService robotService;
     @Autowired
     private AiService aiService;
-    @Autowired
-    private com.wujie.im.common.JwtUtil jwtUtil;
 
     @PostMapping("/create")
     public Result<Robot> createRobot(@RequestBody Map<String, Object> params,
-                                    @RequestHeader(value = "Authorization", required = false) String auth) {
-        Long ownerId = params.get("ownerId") != null ? Long.valueOf(params.get("ownerId").toString()) : null;
-        if (ownerId == null && auth != null && auth.startsWith("Bearer ")) {
-            ownerId = jwtUtil.getUserId(auth.substring(7));
-        }
-        if (ownerId == null) return Result.error("缺少 ownerId");
+                                     jakarta.servlet.http.HttpServletRequest request) {
+        Long ownerId = currentUserId(request);
+        if (ownerId == null) return Result.error("身份缺失");
         
         return Result.success(robotService.createRobot(
                 (String) params.get("name"),
@@ -42,11 +37,9 @@ public class RobotController {
 
     @GetMapping("/list")
     public Result<List<Robot>> listRobots(@RequestParam(required = false) Long ownerId,
-                                         @RequestHeader(value = "Authorization", required = false) String auth) {
-        if (ownerId == null && auth != null && auth.startsWith("Bearer ")) {
-            ownerId = jwtUtil.getUserId(auth.substring(7));
-        }
-        if (ownerId == null) return Result.error("缺少 ownerId");
+                                          jakarta.servlet.http.HttpServletRequest request) {
+        ownerId = currentUserId(request);
+        if (ownerId == null) return Result.error("身份缺失");
         return Result.success(robotService.listRobots(ownerId));
     }
 
@@ -119,5 +112,8 @@ public class RobotController {
         Map<String, String> result = new HashMap<>();
         result.put("reply", reply);
         return Result.success(result);
+    }
+    private Long currentUserId(jakarta.servlet.http.HttpServletRequest request) {
+        return (Long) request.getAttribute(com.wujie.im.common.JwtAuthInterceptor.ATTR_USER_ID);
     }
 }

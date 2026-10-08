@@ -42,7 +42,10 @@ public class UserController {
     }
 
     @PutMapping("/profile")
-    public Result<Void> updateProfile(@RequestBody UserProfile profile) {
+    public Result<Void> updateProfile(@RequestBody UserProfile profile,
+                                      jakarta.servlet.http.HttpServletRequest request) {
+        // 只能改自己的资料：userId 以 token 为准
+        profile.setUserId(currentUserId(request));
         userService.updateProfile(profile);
         return Result.success();
     }
@@ -61,5 +64,8 @@ public class UserController {
         } catch (Exception e) {
             return Result.success(Map.of("error", e.getMessage()));
         }
+    }
+    private Long currentUserId(jakarta.servlet.http.HttpServletRequest request) {
+        return (Long) request.getAttribute(com.wujie.im.common.JwtAuthInterceptor.ATTR_USER_ID);
     }
 }

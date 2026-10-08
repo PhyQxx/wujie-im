@@ -6,6 +6,8 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     { path: '/login', name: 'Login', component: () => import('@/views/Login.vue') },
+    // SSO 回跳页：解析 URL fragment 中的令牌后进入主界面（无需登录态）
+    { path: '/sso/callback', name: 'SsoCallback', component: () => import('@/views/SsoCallback.vue') },
     { path: '/register', name: 'Register', component: () => import('@/views/Register.vue') },
     {
       path: '/',
@@ -39,7 +41,7 @@ const router = createRouter({
 
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('accessToken')
-  if (!token && to.path !== '/login' && to.path !== '/register') {
+  if (!token && to.path !== '/login' && to.path !== '/register' && to.path !== '/sso/callback') {
     next('/login')
   } else if (to.meta.requiresAdmin && localStorage.getItem('isAdmin') !== 'true') {
     next('/conversation')

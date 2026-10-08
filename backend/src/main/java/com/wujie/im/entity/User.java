@@ -10,6 +10,8 @@ public class User {
     @TableId(type = IdType.AUTO)
     private Long id;
     private String username;
+    /** pnkx 统一登录ID（OIDC sub），首次 SSO 登录 JIT 建号写入 */
+    private String ssoId;
     private String password;
     private String phone;
     private String email;

@@ -26,17 +26,20 @@ public class GroupController {
     private org.redisson.api.RedissonClient redissonClient;
 
     @PostMapping("/create")
-    public Result<GroupInfo> createGroup(@RequestBody Map<String, Object> params) {
+    public Result<GroupInfo> createGroup(@RequestBody Map<String, Object> params,
+                                         jakarta.servlet.http.HttpServletRequest request) {
         return Result.success(groupService.createGroup(
                 (String) params.get("name"),
                 (String) params.get("avatar"),
                 (String) params.get("type"),
-                Long.valueOf(params.get("ownerId").toString())
+                currentUserId(request)
         ));
     }
 
     @GetMapping("/list/{userId}")
-    public Result<List<GroupInfo>> getUserGroups(@PathVariable Long userId) {
+    public Result<List<GroupInfo>> getUserGroups(@PathVariable Long userId,
+                                                 jakarta.servlet.http.HttpServletRequest request) {
+        userId = currentUserId(request);
         List<GroupInfo> groups = groupService.getUserGroups(userId);
         for (GroupInfo g : groups) {
             User owner = userMapper.selectById(g.getOwnerId());
@@ -249,5 +252,8 @@ public class GroupController {
     public Result<Void> dissolveGroup(@PathVariable Long groupId, @RequestParam Long userId) {
         groupService.dissolveGroup(groupId, userId);
         return Result.success();
+    }
+    private Long currentUserId(jakarta.servlet.http.HttpServletRequest request) {
+        return (Long) request.getAttribute(com.wujie.im.common.JwtAuthInterceptor.ATTR_USER_ID);
     }
 }
